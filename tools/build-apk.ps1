@@ -77,7 +77,7 @@ $file = Get-Item $apk
 $hash = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Host ""
 Write-Host "APK    : $($file.FullName)"
-Write-Host "Size   : {0:N2} MB" -f ($file.Length / 1MB)
+Write-Host ("Size   : {0:N2} MB" -f ($file.Length / 1MB))
 Write-Host "SHA256 : $hash"
 
 # What actually ended up in the manifest matters: cleartext HTTP has to be allowed for the optional
