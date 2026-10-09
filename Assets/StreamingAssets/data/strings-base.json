@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "locale": "fa",
+  "strings": {
+    "hud.drops": "قطره",
+    "pot.state.seed": "دانه",
+    "pot.state.sprout": "جوانه",
+    "pot.state.plant": "گیاه",
+    "pot.state.bloom": "گل داده",
+    "pot.state.thirsty": "تشنه است",
+    "pot.watered": "آب خورد؛ صبح بعد رشد می‌کند.",
+    "action.water": "آب دادن",
+    "action.play": "جمع کردن قطره",
+    "action.next_morning": "برو به صبح بعد",
+    "water.cost": "هزینه: {n} قطره",
+    "water.not_enough": "قطره کافی نیست؛ با بازی کوتاه جمعش کن.",
+    "game.title": "جفت‌ها",
+    "game.prompt": "متضاد «{word}» کدام است؟",
+    "game.time_left": "زمان",
+    "game.correct": "درست است!",
+    "game.wrong": "این بار نه. پاسخ درست: {answer}",
+    "game.reward": "{n} قطره گرفتی.",
+    "game.no_reward": "خوب تلاش کردی. دفعه‌ی بعد دوباره امتحان کن.",
+    "report.title": "صبح بخیر",
+    "report.grew": "گلدان رشد کرد: حالا «{state}» است.",
+    "report.thirsty": "گلدان دیشب آب نخورد و کمی تشنه است. رشدش محفوظ است.",
+    "report.nothing": "امروز همه‌چیز آرام است.",
+    "settings.title": "تنظیمات",
+    "settings.reduce_motion": "کاهش حرکت",
+    "common.continue": "ادامه",
+    "common.close": "بستن"
+  }
+}

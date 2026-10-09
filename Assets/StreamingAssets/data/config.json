@@ -1,0 +1,34 @@
+{
+  "startDrops": 3,
+  "miniGame": {
+    "rounds": 5,
+    "choicesShown": 3,
+    "totalSeconds": 60,
+    "minCorrectForReward": 3,
+    "dropsPerCorrect": 1,
+    "bonusDropsIfAllCorrect": 2
+  },
+  "watering": {
+    "costDrops": 4
+  },
+  "growth": {
+    "stages": [
+      "seed",
+      "sprout",
+      "plant",
+      "bloom"
+    ],
+    "mornings": {
+      "seedToSprout": 1,
+      "sproutToPlant": 2,
+      "plantToBloom": 2
+    }
+  },
+  "thirsty": {
+    "afterMorningsWithoutWater": 1
+  },
+  "ui": {
+    "maxAnimationMs": 600,
+    "numberCountUpMs": 400
+  }
+}
