@@ -1,2 +1,23 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# The four data files supplied with the challenge are the game's contract, and they are compared byte
+# for byte by tools/verify-data.ps1 and by an EditMode test. Git must not rewrite them on the way in
+# or out, so they are marked as non-text: no end-of-line conversion, no normalisation. This applies to
+# the copies inside the APK as well, which are what the game actually reads.
+data/*.json -text
+Assets/StreamingAssets/data/*.json -text
+
+# Source and documentation are normalised to LF in the repository.
+*.cs text eol=lf
+*.js text eol=lf
+*.md text eol=lf
+*.asmdef text eol=lf
+
+# Windows tooling is happiest with CRLF scripts.
+*.ps1 text eol=crlf
+
+# Unity writes these; diffs are not readable and merge conflicts are never useful.
+*.unity -text
+*.asset -text
+*.prefab -text
