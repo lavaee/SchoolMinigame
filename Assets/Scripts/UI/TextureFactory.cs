@@ -15,6 +15,16 @@ namespace SmallPot
     {
         private static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
 
+        /// <summary>Where baked sprite assets live, relative to a Resources folder.</summary>
+        public const string SpriteFolder = "SmallPotSprites";
+
+        /// <summary>
+        /// Returns one sprite, generating it only when the project does not already contain it.
+        ///
+        /// Generated art is baked into the project as a real sprite asset, which is what lets the scene
+        /// hold a serialisable reference to it and lets you replace any single icon with your own drawing
+        /// by overwriting one file.
+        /// </summary>
         private static Sprite Cached(string key, System.Func<Sprite> create)
         {
             if (Cache.TryGetValue(key, out Sprite sprite) && sprite != null)
@@ -22,7 +32,7 @@ namespace SmallPot
                 return sprite;
             }
 
-            sprite = create();
+            sprite = Resources.Load<Sprite>($"{SpriteFolder}/{key}") ?? create();
             Cache[key] = sprite;
             return sprite;
         }

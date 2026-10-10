@@ -56,25 +56,39 @@ namespace SmallPot
         public const TextAlignmentOptions Paragraph = TextAlignmentOptions.TopRight;
         public const TextAlignmentOptions ParagraphCentred = TextAlignmentOptions.Top;
 
+        /// <summary>
+        /// The interface canvas. Found rather than created when the scene already has one, so the baked
+        /// canvas and the runtime canvas are the same object.
+        /// </summary>
         public static Canvas CreateCanvas(string name, Transform parent)
         {
-            var gameObject = new GameObject(name);
-            if (parent != null)
+            Transform existing = parent != null ? parent.Find(name) : null;
+            GameObject gameObject;
+
+            if (existing != null)
             {
-                gameObject.transform.SetParent(parent, false);
+                gameObject = existing.gameObject;
+            }
+            else
+            {
+                gameObject = new GameObject(name);
+                if (parent != null)
+                {
+                    gameObject.transform.SetParent(parent, false);
+                }
             }
 
-            var canvas = gameObject.AddComponent<Canvas>();
+            var canvas = GetOrAdd<Canvas>(gameObject);
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.pixelPerfect = false;
 
-            var scaler = gameObject.AddComponent<CanvasScaler>();
+            var scaler = GetOrAdd<CanvasScaler>(gameObject);
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = ReferenceResolution;
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0f;
 
-            gameObject.AddComponent<GraphicRaycaster>();
+            GetOrAdd<GraphicRaycaster>(gameObject);
             return canvas;
         }
 
@@ -95,8 +109,32 @@ namespace SmallPot
             gameObject.AddComponent<StandaloneInputModule>();
         }
 
+        /// <summary>Gets a component or adds it, so running a builder twice never stacks duplicates.</summary>
+        public static T GetOrAdd<T>(GameObject target) where T : Component
+        {
+            T found = target.GetComponent<T>();
+            return found != null ? found : target.AddComponent<T>();
+        }
+
+        /// <summary>
+        /// Finds a child by name, or creates it.
+        ///
+        /// Finding first is what lets the same builder run twice: the scene baker runs it once in the
+        /// editor to place the interface in the scene, and the game runs it again at startup to refresh
+        /// the labels from the current data. The second run updates what is already there rather than
+        /// replacing it, which is what preserves interface art you replaced by hand.
+        /// </summary>
         public static RectTransform Node(string name, Transform parent)
         {
+            if (parent != null)
+            {
+                var existing = parent.Find(name) as RectTransform;
+                if (existing != null)
+                {
+                    return existing;
+                }
+            }
+
             var gameObject = new GameObject(name, typeof(RectTransform));
             gameObject.transform.SetParent(parent, false);
             return (RectTransform)gameObject.transform;
@@ -136,12 +174,22 @@ namespace SmallPot
             return rect;
         }
 
+        /// <summary>
+        /// A rounded panel. The sprite is only assigned when the image has none, so a background you
+        /// replaced with your own art survives every rebuild; the colour keeps being driven, because the
+        /// colour is what carries state.
+        /// </summary>
         public static Image Panel(string name, Transform parent, Color color, int radius = 22)
         {
             RectTransform rect = Node(name, parent);
-            var image = rect.gameObject.AddComponent<Image>();
-            image.sprite = TextureFactory.RoundedRect(radius: radius);
-            image.type = Image.Type.Sliced;
+            var image = GetOrAdd<Image>(rect.gameObject);
+
+            if (image.sprite == null)
+            {
+                image.sprite = TextureFactory.RoundedRect(radius: radius);
+                image.type = Image.Type.Sliced;
+            }
+
             image.color = color;
             return image;
         }
@@ -149,7 +197,7 @@ namespace SmallPot
         public static Image Solid(string name, Transform parent, Color color)
         {
             RectTransform rect = Node(name, parent);
-            var image = rect.gameObject.AddComponent<Image>();
+            var image = GetOrAdd<Image>(rect.gameObject);
             image.color = color;
             return image;
         }
@@ -157,8 +205,13 @@ namespace SmallPot
         public static Image Icon(string name, Transform parent, Sprite sprite, Color color)
         {
             RectTransform rect = Node(name, parent);
-            var image = rect.gameObject.AddComponent<Image>();
-            image.sprite = sprite;
+            var image = GetOrAdd<Image>(rect.gameObject);
+
+            if (image.sprite == null)
+            {
+                image.sprite = sprite;
+            }
+
             image.color = color;
             image.raycastTarget = false;
             image.preserveAspect = true;
@@ -198,7 +251,7 @@ namespace SmallPot
             FontStyles style = FontStyles.Normal,
             bool wrap = true)
         {
-            var text = rect.gameObject.AddComponent<RTLTextMeshPro>();
+            var text = GetOrAdd<RTLTextMeshPro>(rect.gameObject);
 
             if (Font != null)
             {
@@ -234,12 +287,17 @@ namespace SmallPot
             Sprite icon = null)
         {
             RectTransform rect = Node(name, parent);
-            var image = rect.gameObject.AddComponent<Image>();
-            image.sprite = TextureFactory.RoundedRect();
-            image.type = Image.Type.Sliced;
+            var image = GetOrAdd<Image>(rect.gameObject);
+
+            if (image.sprite == null)
+            {
+                image.sprite = TextureFactory.RoundedRect();
+                image.type = Image.Type.Sliced;
+            }
+
             image.color = background;
 
-            var button = rect.gameObject.AddComponent<Button>();
+            var button = GetOrAdd<Button>(rect.gameObject);
             button.targetGraphic = image;
 
             ColorBlock colors = button.colors;
@@ -253,6 +311,10 @@ namespace SmallPot
 
             if (onClick != null)
             {
+                // Cleared first: the builders run again on every data reload, and stacking the same
+                // handler twice would fire it twice.
+                button.onClick.RemoveAllListeners();
+                button.onClick.AddListener(() => AudioDirector.Play(Sound.Click));
                 button.onClick.AddListener(onClick);
             }
 
@@ -280,7 +342,7 @@ namespace SmallPot
         /// <summary>Adds a soft drop shadow behind a panel, which separates it from the scene behind.</summary>
         public static void AddShadow(RectTransform target, float distance = 8f, float alpha = 0.18f)
         {
-            var shadow = target.gameObject.AddComponent<Shadow>();
+            var shadow = GetOrAdd<Shadow>(target.gameObject);
             shadow.effectColor = new Color(0f, 0f, 0f, alpha);
             shadow.effectDistance = new Vector2(0f, -distance);
         }
@@ -300,14 +362,15 @@ namespace SmallPot
         public static Image Scrim(string name, Transform parent, UnityAction onClick = null)
         {
             RectTransform rect = Node(name, parent);
-            var image = rect.gameObject.AddComponent<Image>();
+            var image = GetOrAdd<Image>(rect.gameObject);
             image.color = Palette.Scrim;
 
             if (onClick != null)
             {
-                var button = rect.gameObject.AddComponent<Button>();
+                var button = GetOrAdd<Button>(rect.gameObject);
                 button.transition = Selectable.Transition.None;
                 button.targetGraphic = image;
+                button.onClick.RemoveAllListeners();
                 button.onClick.AddListener(onClick);
             }
 

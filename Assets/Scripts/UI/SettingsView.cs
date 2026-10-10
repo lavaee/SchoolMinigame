@@ -79,10 +79,14 @@ namespace SmallPot
             UiKit.Stretch(check.rectTransform, 12f, 12f, 12f, 12f);
             _motionCheck = check;
 
-            var toggle = box.gameObject.AddComponent<Button>();
+            var toggle = UiKit.GetOrAdd<Button>(box.gameObject);
             toggle.targetGraphic = box;
+            // Cleared first: the settings panel is rebuilt whenever the data changes, and a stacked
+            // handler would flip the setting twice per tap.
+            toggle.onClick.RemoveAllListeners();
             toggle.onClick.AddListener(() =>
             {
+                AudioDirector.Play(Sound.Click);
                 _motion.ReduceMotion = !_motion.ReduceMotion;
                 RefreshMotionState();
             });

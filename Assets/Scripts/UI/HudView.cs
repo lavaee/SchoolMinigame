@@ -43,6 +43,7 @@ namespace SmallPot
 
         private int _shownDrops = -1;
         private Coroutine _countUp;
+        private Coroutine _chipFlash;
 
         public event Action WaterClicked;
         public event Action PlayClicked;
@@ -290,6 +291,44 @@ namespace SmallPot
             {
                 _statusChipText.text = _strings.Display(text);
             }
+        }
+
+        /// <summary>
+        /// Shows a short note in the status chip and hands the chip back to its normal content.
+        ///
+        /// Used for the "content was updated" moment: worth telling the player about, not worth stopping
+        /// the game for, and never a dialog they have to dismiss.
+        /// </summary>
+        public void FlashStatusChip(string text, float seconds)
+        {
+            if (_statusChip == null)
+            {
+                return;
+            }
+
+            if (_chipFlash != null)
+            {
+                _host.StopCoroutine(_chipFlash);
+            }
+
+            _chipFlash = _host.StartCoroutine(FlashRoutine(text, seconds));
+        }
+
+        private IEnumerator FlashRoutine(string text, float seconds)
+        {
+            string restored = _statusChip.gameObject.activeSelf ? _statusChipText.text : string.Empty;
+
+            SetStatusChip(text);
+            yield return Tween.WaitUnscaled(Mathf.Max(0.5f, seconds));
+
+            if (_statusChip == null)
+            {
+                yield break;
+            }
+
+            _statusChipText.text = restored;
+            _statusChip.gameObject.SetActive(!string.IsNullOrEmpty(restored));
+            _chipFlash = null;
         }
 
         public void ShowReport(string title, string body)
