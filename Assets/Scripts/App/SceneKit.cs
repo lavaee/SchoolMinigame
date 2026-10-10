@@ -51,23 +51,15 @@ namespace SmallPot
         public static readonly Color Scrim = new Color32(0x2A, 0x22, 0x1A, 0x9A);
     }
 
-    /// <summary>Handles to the parts of the pot that change when the plant does.</summary>
-    public sealed class PotRig
-    {
-        public Transform Root;
-        public Transform PlantAnchor;
-        public MeshRenderer Soil;
-        public Material SoilMaterial;
-
-        /// <summary>World height above the soil surface that a fully grown plant reaches.</summary>
-        public const float MaxStemHeight = 1.05f;
-    }
-
     /// <summary>
     /// Builds the static part of the world: camera, lighting, the window and the pot.
     ///
     /// The camera is an orthographic three-quarter view of a windowsill, which is the isometric look
     /// the brief asks for without making the ledge run diagonally across a portrait screen.
+    ///
+    /// This is not called at startup any more: it is the stand-in generator behind
+    /// "Small Pot / Rebuild Stand-in Scene", which bakes the geometry into the scene once. After that
+    /// the scene itself is what ships and what you edit.
     /// </summary>
     public static class SceneKit
     {
@@ -301,13 +293,15 @@ namespace SmallPot
             anchor.transform.SetParent(t, false);
             anchor.transform.localPosition = new Vector3(0f, soilTopY, 0f);
 
-            return new PotRig
-            {
-                Root = t,
-                PlantAnchor = anchor.transform,
-                Soil = soil.GetComponent<MeshRenderer>(),
-                SoilMaterial = soilMaterial
-            };
+            var rig = t.gameObject.AddComponent<PotRig>();
+            rig.PlantAnchor = anchor.transform;
+            rig.Soil = soil.GetComponent<MeshRenderer>();
+            rig.SoilMaterial = soilMaterial;
+
+            // The generator is the one caller that must be allowed to create the plant parts. The baker
+            // turns this back off before saving, so a part you delete afterwards stays deleted.
+            rig.CreateMissingParts = true;
+            return rig;
         }
     }
 }

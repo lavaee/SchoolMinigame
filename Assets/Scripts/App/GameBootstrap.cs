@@ -4,49 +4,73 @@ using UnityEngine;
 namespace SmallPot
 {
     /// <summary>
-    /// The scene's only component, and the composition root.
+    /// The composition root.
     ///
-    /// The scene deliberately contains nothing but this object: the camera, the lighting, the
-    /// windowsill, the pot and the entire interface are built from code at startup. That is what makes
-    /// the data files authoritative for the visuals as well as for the text - adding a sixth stage to
-    /// config.json changes what the pot looks like, with nothing to re-author in the editor.
+    /// Nothing is generated here. The camera, the lighting, the window, the pot and the whole interface
+    /// live in the scene, created once by "Small Pot/Rebuild Stand-in Scene" and editable from then on,
+    /// so replacing a model, a sprite or a sound is an inspector job rather than a code change. This
+    /// script only finds the parts, wires them together and hands them to the controller.
     /// </summary>
+    [DisallowMultipleComponent]
     public sealed class GameBootstrap : MonoBehaviour
     {
-        /// <summary>Generated Persian font asset, assigned when the project is generated.</summary>
+        [Header("Assets")]
+        [Tooltip("Generated Persian font asset. Assigned by the project setup.")]
         public TMP_FontAsset FontAsset;
 
-        /// <summary>Shared sprite material, so the sprite shader is guaranteed to be in the build.</summary>
+        [Tooltip("Shared sprite material, so the sprite shader is guaranteed to be in the build.")]
         public Material SpriteMaterial;
 
-        public bool BuildOnStart = true;
+        [Header("Scene parts")]
+        [Tooltip("The pot and its plant. Found in the scene when left empty.")]
+        public PotRig PotRig;
+
+        [Tooltip("The camera the game plays through. Falls back to the main camera.")]
+        public Camera Camera;
+
+        [Tooltip("Optional. Leave empty to run silently, which is the default until you add clips.")]
+        public AudioDirector Audio;
 
         private void Awake()
         {
-            if (BuildOnStart)
-            {
-                Build();
-            }
+            Bind();
         }
 
-        public void Build()
+        /// <summary>Wires the scene up and starts the game. Safe to call again from the editor.</summary>
+        public void Bind()
         {
             UiKit.Font = FontAsset;
             MeshFactory.SpriteMaterial = SpriteMaterial;
 
-            Camera camera = SceneKit.CreateCamera(null);
-            SceneKit.CreateLighting(null);
+            if (PotRig == null)
+            {
+                PotRig = FindObjectOfType<PotRig>();
+            }
 
-            var world = new GameObject("World");
-            SceneKit.CreateEnvironment(world.transform);
-            PotRig rig = SceneKit.CreatePot(world.transform);
+            if (Camera == null)
+            {
+                Camera = Camera.main != null ? Camera.main : FindObjectOfType<Camera>();
+            }
 
-            var controller = gameObject.AddComponent<GameController>();
+            if (Audio == null)
+            {
+                Audio = FindObjectOfType<AudioDirector>();
+            }
 
-            var potView = gameObject.AddComponent<PotView>();
-            potView.Initialize(rig, camera, controller.Motion);
+            GameController controller = gameObject.GetComponent<GameController>();
+            if (controller == null)
+            {
+                controller = gameObject.AddComponent<GameController>();
+            }
 
-            controller.Initialize(camera, potView);
+            PotView potView = gameObject.GetComponent<PotView>();
+            if (potView == null)
+            {
+                potView = gameObject.AddComponent<PotView>();
+            }
+
+            potView.Initialize(PotRig, Camera, controller.Motion);
+            controller.Initialize(Camera, potView, Audio);
         }
     }
 }

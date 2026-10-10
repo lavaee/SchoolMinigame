@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -20,6 +21,7 @@ namespace SmallPot
         private struct LeafPart
         {
             public Transform Transform;
+            public int PairIndex;
             public float Fraction;
             public float Angle;
             public float Size;
@@ -27,7 +29,9 @@ namespace SmallPot
 
         private const float MinimumStemHeight = 0.06f;
         private const float DroopDegrees = 40f;
-        private const float BadgeScale = 0.30f;
+
+        /// <summary>Used only when the rig is missing altogether, so a broken scene still says something.</summary>
+        private const float FallbackMaxStemHeight = 1.05f;
 
         private PotRig _rig;
         private Camera _camera;
@@ -35,12 +39,19 @@ namespace SmallPot
 
         private Transform _plant;
         private Transform _stem;
-        private GameObject _seedShell;
+        private Transform _seedShell;
+        private Transform _foliage;
         private readonly List<LeafPart> _leaves = new List<LeafPart>();
         private Transform _flowerRoot;
-        private GameObject _waterBadge;
-        private GameObject _thirstBadge;
-        private Material _soilMaterial;
+        private Transform _waterBadge;
+        private Transform _thirstBadge;
+        private MeshRenderer _soil;
+
+        /// <summary>Tint applied through a property block so the material asset is never written to.</summary>
+        private MaterialPropertyBlock _soilBlock;
+
+        /// <summary>Parts already reported missing, so the warning is printed once instead of every frame.</summary>
+        private readonly HashSet<string> _reported = new HashSet<string>();
 
         private float _height = MinimumStemHeight;
         private float _tilt;
@@ -53,51 +64,247 @@ namespace SmallPot
         public void Initialize(PotRig rig, Camera camera, MotionPrefs motion)
         {
             _rig = rig;
-            _camera = camera;
             _motion = motion;
-            _soilMaterial = rig.SoilMaterial;
 
-            _plant = new GameObject("Plant").transform;
-            _plant.SetParent(rig.PlantAnchor, false);
+            if (rig == null)
+            {
+                Debug.LogWarning(
+                    "[SmallPot] PotView has no PotRig, so the plant cannot be drawn. " +
+                    "Run \"Small Pot/Rebuild Stand-in Scene\", or assign one in the inspector.");
+                return;
+            }
 
-            _stem = MeshFactory.MeshObject(
+            _camera = camera != null ? camera : rig.Camera;
+            _soil = rig.Soil;
+            _soilBlock = new MaterialPropertyBlock();
+
+            _plant = EnsureContainer(ref rig.PlantRoot, rig.PlantAnchor, "Plant");
+            if (_plant == null)
+            {
+                Debug.LogWarning("[SmallPot] The pot has no plant anchor, so the plant cannot be drawn.");
+                return;
+            }
+
+            _stem = EnsurePart(ref rig.Stem, _plant, "Stem", () => MeshFactory.MeshObject(
                 "Stem",
                 _plant,
                 MeshFactory.TaperedCylinder(0.016f, 0.026f, 1f, 10),
-                MeshFactory.Lit("stem", Palette.Stem)).transform;
+                MeshFactory.Lit("stem", Palette.Stem)).transform);
 
-            _seedShell = MeshFactory.Primitive(
-                PrimitiveType.Sphere,
-                "Seed Shell",
-                _plant,
-                MeshFactory.Lit("seed", Palette.Seed));
-            _seedShell.transform.SetLocalTRS(
-                new Vector3(0.01f, 0.035f, 0f),
-                Quaternion.Euler(0f, 24f, 14f),
-                new Vector3(0.15f, 0.10f, 0.19f));
+            _seedShell = EnsurePart(ref rig.SeedShell, _plant, "Seed Shell", () =>
+            {
+                GameObject shell = MeshFactory.Primitive(
+                    PrimitiveType.Sphere, "Seed Shell", _plant, MeshFactory.Lit("seed", Palette.Seed));
+                shell.transform.SetLocalTRS(
+                    new Vector3(0.01f, 0.035f, 0f),
+                    Quaternion.Euler(0f, 24f, 14f),
+                    rig.SeedUnitScale);
+                return shell.transform;
+            });
 
-            _waterBadge = MeshFactory.SpriteObject(
-                "Watered Badge", _plant, TextureFactory.Droplet(), Palette.Water, 10);
-            _waterBadge.transform.SetLocalTRS(Vector3.zero, Quaternion.identity, Vector3.one * BadgeScale);
-            _waterBadge.SetActive(false);
+            _foliage = EnsureContainer(ref rig.FoliageRoot, _plant, "Foliage");
 
-            _thirstBadge = MeshFactory.SpriteObject(
-                "Thirsty Badge", _plant, TextureFactory.DropletSlash(), Palette.Thirst, 10);
-            _thirstBadge.transform.SetLocalTRS(Vector3.zero, Quaternion.identity, Vector3.one * BadgeScale);
-            _thirstBadge.SetActive(false);
+            _waterBadge = EnsurePart(ref rig.WaterBadge, _plant, "Watered Badge", () => Badge(
+                "Watered Badge", TextureFactory.Droplet(), Palette.Water));
+            _thirstBadge = EnsurePart(ref rig.ThirstBadge, _plant, "Thirsty Badge", () => Badge(
+                "Thirsty Badge", TextureFactory.DropletSlash(), Palette.Thirst));
+
+            // Every leaf the plant may ever show is bound once. Growth then only changes how many are
+            // active and where they sit, which is what lets authored leaves survive a stage change.
+            BindLeaves();
+            _flowerRoot = EnsurePart(ref rig.Flower, _plant, "Flower", () => BuildFlower(_plant));
+
+            if (_waterBadge != null)
+            {
+                _waterBadge.gameObject.SetActive(false);
+            }
+
+            if (_thirstBadge != null)
+            {
+                _thirstBadge.gameObject.SetActive(false);
+            }
+
+            if (_flowerRoot != null)
+            {
+                _flowerRoot.gameObject.SetActive(false);
+            }
+        }
+
+        private Transform Badge(string name, Sprite sprite, Color color)
+        {
+            GameObject badge = MeshFactory.SpriteObject(name, _plant, sprite, color, 10);
+            badge.transform.SetLocalTRS(Vector3.zero, Quaternion.identity, Vector3.one * (_rig != null ? _rig.BadgeScale : 0.30f));
+            return badge.transform;
+        }
+
+        /// <summary>
+        /// Builds the leaf list from the rig's objects, creating the missing ones only while the rig
+        /// allows it. The rig is updated in place, so whatever is bound here is what the inspector shows
+        /// after the scene is baked.
+        /// </summary>
+        private void BindLeaves()
+        {
+            _leaves.Clear();
+
+            int wanted = Mathf.Max(1, _rig != null ? _rig.MaxLeafPairs : 2) * 2;
+            var bound = new List<Transform>();
+
+            if (_rig != null && _rig.Leaves != null)
+            {
+                foreach (Transform leaf in _rig.Leaves)
+                {
+                    if (leaf != null)
+                    {
+                        bound.Add(leaf);
+                    }
+                }
+            }
+
+            for (int index = 0; index < wanted; index++)
+            {
+                Transform leaf = index < bound.Count ? bound[index] : null;
+                if (leaf == null)
+                {
+                    int pair = index / 2;
+                    int side = index % 2;
+                    Transform slot = null;
+                    leaf = EnsurePart(ref slot, _foliage, $"Leaf {pair}.{side}", () => MeshFactory.Primitive(
+                        PrimitiveType.Sphere,
+                        $"Leaf {pair}.{side}",
+                        _foliage,
+                        MeshFactory.Lit("leaf", Palette.Leaf)).transform);
+                }
+
+                if (leaf == null)
+                {
+                    continue;
+                }
+
+                _leaves.Add(new LeafPart
+                {
+                    Transform = leaf,
+                    PairIndex = index / 2,
+                    Fraction = 0.62f,
+                    Angle = 24f,
+                    Size = 1f
+                });
+            }
+
+            // Leaves the rig listed beyond the bound set are left exactly as they are; hiding them here
+            // would silently disable art the user added on purpose.
+            if (_rig != null)
+            {
+                var all = new List<Transform>();
+                foreach (LeafPart leaf in _leaves)
+                {
+                    all.Add(leaf.Transform);
+                }
+
+                for (int index = all.Count; index < bound.Count; index++)
+                {
+                    all.Add(bound[index]);
+                }
+
+                _rig.Leaves = all.ToArray();
+            }
+        }
+
+        /// <summary>Finds or creates a plain container, used for the plant root and the foliage root.</summary>
+        private Transform EnsureContainer(ref Transform slot, Transform parent, string name)
+        {
+            if (slot != null)
+            {
+                return slot;
+            }
+
+            Transform found = parent != null ? parent.Find(name) : null;
+            if (found != null)
+            {
+                slot = found;
+                return found;
+            }
+
+            if (_rig == null || !_rig.CreateMissingParts)
+            {
+                ReportMissing(name);
+                return null;
+            }
+
+            var created = new GameObject(name);
+            created.transform.SetParent(parent != null ? parent : _rig.transform, false);
+            slot = created.transform;
+            return slot;
+        }
+
+        /// <summary>
+        /// Finds or creates one mesh part. The factory runs only when the part is genuinely absent and
+        /// the rig allows creation, so an object you replaced with your own art is never overwritten.
+        ///
+        /// Note that this cannot delegate to a helper that makes a bare GameObject: the part needs its
+        /// mesh or its sprite, and an empty object with the right name would silently render nothing.
+        /// </summary>
+        private Transform EnsurePart(ref Transform slot, Transform parent, string name, Func<Transform> create)
+        {
+            if (slot != null)
+            {
+                return slot;
+            }
+
+            if (parent != null)
+            {
+                Transform found = parent.Find(name);
+                if (found != null)
+                {
+                    slot = found;
+                    return found;
+                }
+            }
+
+            if (_rig != null && !_rig.CreateMissingParts)
+            {
+                ReportMissing(name);
+                return null;
+            }
+
+            Transform created = create();
+            if (created == null)
+            {
+                return null;
+            }
+
+            created.name = name;
+            created.SetParent(parent, false);
+            slot = created;
+            return created;
+        }
+
+        private void ReportMissing(string name)
+        {
+            if (_reported.Add(name))
+            {
+                Debug.LogWarning(
+                    $"[SmallPot] The pot has no \"{name}\". Assign it on the PotRig component, or run " +
+                    "\"Small Pot/Rebuild Stand-in Scene\" to generate the stand-in again.");
+            }
         }
 
         /// <summary>Makes the pot look like the supplied visual. Never drops the final state.</summary>
         public void Apply(PotVisual visual, GameConfig config, bool animate)
         {
-            float target = Mathf.Max(MinimumStemHeight, visual.Height * PotRig.MaxStemHeight);
+            if (_rig == null || _plant == null)
+            {
+                return;
+            }
+
+            float ceiling = _rig.StemMaxHeight > 0.01f ? _rig.StemMaxHeight : FallbackMaxStemHeight;
+            float target = Mathf.Max(MinimumStemHeight, visual.Height * ceiling);
             _tilt = visual.LeafTiltDegrees + (visual.Droop ? DroopDegrees : 0f);
             _droop = visual.Droop;
 
             bool structureChanged = visual.LeafPairs != _builtLeafPairs || visual.Flower != _builtFlower;
             if (structureChanged)
             {
-                BuildFoliage(visual.LeafPairs, visual.Flower);
+                EnsureFoliage(visual.LeafPairs, visual.Flower);
                 _builtLeafPairs = visual.LeafPairs;
                 _builtFlower = visual.Flower;
             }
@@ -105,31 +312,31 @@ namespace SmallPot
             if (_seedShell != null)
             {
                 // The seed casing is only visible while the plant is still just a seed.
-                _seedShell.SetActive(visual.LeafPairs == 0 && !visual.Flower);
+                _seedShell.gameObject.SetActive(visual.LeafPairs == 0 && !visual.Flower);
             }
 
-            if (_stem != null)
+            if (_stem != null && _rig.ColorPlantParts)
             {
-                _stem.GetComponent<MeshRenderer>().sharedMaterial = visual.LeafPairs == 0 && !visual.Flower
-                    ? MeshFactory.Lit("seed", Palette.Seed)
-                    : MeshFactory.Lit("stem", Palette.Stem);
+                var stemRenderer = _stem.GetComponent<MeshRenderer>();
+                if (stemRenderer != null)
+                {
+                    stemRenderer.sharedMaterial = visual.LeafPairs == 0 && !visual.Flower
+                        ? MeshFactory.Lit("seed", Palette.Seed)
+                        : MeshFactory.Lit("stem", Palette.Stem);
+                }
             }
 
-            if (_soilMaterial != null)
-            {
-                _soilMaterial.color = Color.Lerp(Palette.SoilWet, Palette.SoilDry, Mathf.Clamp01(visual.SoilDryness));
-            }
-
+            ApplySoilColour(visual.SoilDryness);
             ApplyLeafColour();
 
             if (_waterBadge != null)
             {
-                _waterBadge.SetActive(visual.WateredBadge);
+                _waterBadge.gameObject.SetActive(visual.WateredBadge);
             }
 
             if (_thirstBadge != null)
             {
-                _thirstBadge.SetActive(visual.ThirstyBadge);
+                _thirstBadge.gameObject.SetActive(visual.ThirstyBadge);
             }
 
             float duration = animate ? _motion.Duration(config?.TransitionSeconds ?? 0.6f) : 0f;
@@ -242,8 +449,11 @@ namespace SmallPot
             if (_stem != null)
             {
                 float height = Mathf.Max(0.001f, _height);
+                // Dividing by the authored stem's own height keeps the config fractions meaning the same
+                // thing whatever your stem mesh measures.
+                float unit = _rig != null && _rig.StemUnitHeight > 0.001f ? _rig.StemUnitHeight : 1f;
                 _stem.localPosition = new Vector3(0f, height * 0.5f, 0f);
-                _stem.localScale = new Vector3(1f, height, 1f);
+                _stem.localScale = new Vector3(1f, height / unit, 1f);
             }
 
             for (int i = 0; i < _leaves.Count; i++)
@@ -265,7 +475,7 @@ namespace SmallPot
                     Quaternion.LookRotation(outward, Vector3.up) * Quaternion.Euler(_tilt, 0f, 0f);
 
                 float appear = _appear;
-                leaf.Transform.localScale = new Vector3(0.26f, 0.05f, 0.42f) * (leaf.Size * appear);
+                leaf.Transform.localScale = LeafScale * (leaf.Size * appear);
             }
 
             // A gentle bob makes the badges feel alive; reduce-motion removes it without removing them.
@@ -274,14 +484,14 @@ namespace SmallPot
                 : Mathf.Sin(Time.unscaledTime * 2.2f) * 0.022f;
             float badgeY = Mathf.Max(0.16f, _height) + 0.20f + bob;
 
-            if (_waterBadge != null && _waterBadge.activeSelf)
+            if (_waterBadge != null && _waterBadge.gameObject.activeSelf)
             {
-                _waterBadge.transform.localPosition = new Vector3(_thirstBadge != null && _thirstBadge.activeSelf ? -0.15f : 0f, badgeY, 0f);
+                _waterBadge.transform.localPosition = new Vector3(_thirstBadge != null && _thirstBadge.gameObject.activeSelf ? -0.15f : 0f, badgeY, 0f);
             }
 
-            if (_thirstBadge != null && _thirstBadge.activeSelf)
+            if (_thirstBadge != null && _thirstBadge.gameObject.activeSelf)
             {
-                _thirstBadge.transform.localPosition = new Vector3(_waterBadge != null && _waterBadge.activeSelf ? 0.15f : 0f, badgeY, 0f);
+                _thirstBadge.transform.localPosition = new Vector3(_waterBadge != null && _waterBadge.gameObject.activeSelf ? 0.15f : 0f, badgeY, 0f);
             }
 
             if (_flowerRoot != null)
@@ -290,95 +500,118 @@ namespace SmallPot
             }
         }
 
-        /// <summary>Rebuilds leaves and flower. Cheap enough to redo on any stage change.</summary>
-        private void BuildFoliage(int leafPairs, bool flower)
+        /// <summary>
+        /// Shows the leaves the stage calls for and hides the rest. Nothing is destroyed, which is what
+        /// makes it safe to point the rig at objects you authored: growth only changes how many leaves
+        /// are visible and where they sit, never that they exist.
+        /// </summary>
+        private void EnsureFoliage(int leafPairs, bool flower)
         {
-            foreach (LeafPart leaf in _leaves)
-            {
-                if (leaf.Transform != null)
-                {
-                    Destroy(leaf.Transform.gameObject);
-                }
-            }
+            int available = Mathf.Max(0, _leaves.Count / 2);
+            int shown = Mathf.Clamp(leafPairs, 0, available);
 
-            _leaves.Clear();
+            for (int index = 0; index < _leaves.Count; index++)
+            {
+                LeafPart leaf = _leaves[index];
+                if (leaf.Transform == null)
+                {
+                    continue;
+                }
+
+                bool visible = leaf.PairIndex < shown;
+                leaf.Transform.gameObject.SetActive(visible);
+                if (!visible)
+                {
+                    continue;
+                }
+
+                // The fractions depend on how many pairs this stage shows, so an existing pair moves
+                // down the stem when a new one appears above it.
+                float pairs = Mathf.Max(1, shown);
+                leaf.Fraction = pairs <= 1f ? 0.62f : 0.34f + (0.52f * leaf.PairIndex / (pairs - 1f));
+                leaf.Angle = 24f + (leaf.PairIndex * 38f) + ((index % 2) * 180f);
+                leaf.Size = 0.85f + (0.25f * leaf.PairIndex / Mathf.Max(1f, pairs - 1f));
+                _leaves[index] = leaf;
+            }
 
             if (_flowerRoot != null)
             {
-                Destroy(_flowerRoot.gameObject);
-                _flowerRoot = null;
-            }
-
-            Material leafMaterial = MeshFactory.Lit(_droop ? "leafdry" : "leaf", _droop ? Palette.LeafThirsty : Palette.Leaf);
-
-            for (int pair = 0; pair < leafPairs; pair++)
-            {
-                float fraction = leafPairs <= 1 ? 0.62f : 0.34f + (0.52f * pair / (leafPairs - 1f));
-                float baseAngle = 24f + (pair * 38f);
-                float size = 0.85f + (0.25f * pair / Mathf.Max(1f, leafPairs - 1f));
-
-                for (int side = 0; side < 2; side++)
-                {
-                    float angle = baseAngle + (side * 180f);
-                    GameObject leafObject = MeshFactory.Primitive(
-                        PrimitiveType.Sphere,
-                        $"Leaf {pair}.{side}",
-                        _plant,
-                        leafMaterial);
-
-                    _leaves.Add(new LeafPart
-                    {
-                        Transform = leafObject.transform,
-                        Fraction = fraction,
-                        Angle = angle,
-                        Size = size
-                    });
-                }
-            }
-
-            if (flower)
-            {
-                Material petalMaterial = MeshFactory.Lit(
-                    _droop ? "blossomdry" : "blossom",
-                    _droop ? new Color32(0xDD, 0xB0, 0xC0, 0xFF) : Palette.Blossom);
-
-                // Petals are children of a billboarded root, arranged in a ring inside its plane, so the
-                // blossom reads as five petals from the fixed isometric angle.
-                var flowerObject = new GameObject("Flower");
-                flowerObject.transform.SetParent(_plant, false);
-                _flowerRoot = flowerObject.transform;
-
-                for (int i = 0; i < 5; i++)
-                {
-                    float angle = i * 72f;
-                    float radians = angle * Mathf.Deg2Rad;
-                    GameObject petal = MeshFactory.Primitive(
-                        PrimitiveType.Sphere,
-                        $"Petal {i}",
-                        _flowerRoot,
-                        petalMaterial);
-                    petal.transform.SetLocalTRS(
-                        new Vector3(Mathf.Cos(radians) * 0.10f, Mathf.Sin(radians) * 0.10f, 0f),
-                        Quaternion.Euler(0f, 0f, angle),
-                        new Vector3(0.13f, 0.21f, 0.05f));
-                }
-
-                GameObject heart = MeshFactory.Primitive(
-                    PrimitiveType.Sphere,
-                    "Flower Heart",
-                    _flowerRoot,
-                    MeshFactory.Lit("blossomheart", Palette.BlossomHeart));
-                heart.transform.SetLocalTRS(Vector3.zero, Quaternion.identity, new Vector3(0.09f, 0.09f, 0.055f));
-
-                Layout();
+                _flowerRoot.gameObject.SetActive(flower);
             }
 
             Layout();
         }
 
+        /// <summary>Creates the stand-in blossom: five petals and a heart under one billboarded root.</summary>
+        private static Transform BuildFlower(Transform parent)
+        {
+            Material petalMaterial = MeshFactory.Lit("blossom", Palette.Blossom);
+
+            // Petals are children of a billboarded root, arranged in a ring inside its plane, so the
+            // blossom reads as five petals from the fixed isometric angle.
+            var flowerObject = new GameObject("Flower");
+            flowerObject.transform.SetParent(parent, false);
+            Transform root = flowerObject.transform;
+
+            for (int i = 0; i < 5; i++)
+            {
+                float angle = i * 72f;
+                float radians = angle * Mathf.Deg2Rad;
+                GameObject petal = MeshFactory.Primitive(
+                    PrimitiveType.Sphere,
+                    $"Petal {i}",
+                    root,
+                    petalMaterial);
+                petal.transform.SetLocalTRS(
+                    new Vector3(Mathf.Cos(radians) * 0.10f, Mathf.Sin(radians) * 0.10f, 0f),
+                    Quaternion.Euler(0f, 0f, angle),
+                    new Vector3(0.13f, 0.21f, 0.05f));
+            }
+
+            GameObject heart = MeshFactory.Primitive(
+                PrimitiveType.Sphere,
+                "Flower Heart",
+                root,
+                MeshFactory.Lit("blossomheart", Palette.BlossomHeart));
+            heart.transform.SetLocalTRS(Vector3.zero, Quaternion.identity, new Vector3(0.09f, 0.09f, 0.055f));
+            return root;
+        }
+
+        /// <summary>Scale applied to one leaf object at full size.</summary>
+        private Vector3 LeafScale => _rig != null && _rig.LeafUnitScale != Vector3.zero
+            ? _rig.LeafUnitScale
+            : new Vector3(0.26f, 0.05f, 0.42f);
+
+        /// <summary>
+        /// Tints the soil through a property block rather than by writing to the material, so a material
+        /// you authored is never modified and no asset is ever dirtied by playing the game.
+        /// </summary>
+        private void ApplySoilColour(float dryness)
+        {
+            if (_soil == null || _soilBlock == null)
+            {
+                return;
+            }
+
+            Material material = _soil.sharedMaterial;
+            if (material == null || !material.HasProperty("_Color"))
+            {
+                return;
+            }
+
+            _soilBlock.Clear();
+            _soilBlock.SetColor("_Color", Color.Lerp(Palette.SoilWet, Palette.SoilDry, Mathf.Clamp01(dryness)));
+            _soil.SetPropertyBlock(_soilBlock);
+        }
+
         private void ApplyLeafColour()
         {
-            Material material = MeshFactory.Lit(
+            if (_rig != null && !_rig.ColorPlantParts)
+            {
+                return;
+            }
+
+            Material leafMaterial = MeshFactory.Lit(
                 _droop ? "leafdry" : "leaf",
                 _droop ? Palette.LeafThirsty : Palette.Leaf);
 
@@ -392,7 +625,25 @@ namespace SmallPot
                 var renderer = leaf.Transform.GetComponent<MeshRenderer>();
                 if (renderer != null)
                 {
-                    renderer.sharedMaterial = material;
+                    renderer.sharedMaterial = leafMaterial;
+                }
+            }
+
+            if (_flowerRoot == null)
+            {
+                return;
+            }
+
+            Material petalMaterial = MeshFactory.Lit(
+                _droop ? "blossomdry" : "blossom",
+                _droop ? new Color32(0xDD, 0xB0, 0xC0, 0xFF) : Palette.Blossom);
+
+            foreach (Transform petal in _flowerRoot)
+            {
+                var renderer = petal.GetComponent<MeshRenderer>();
+                if (renderer != null)
+                {
+                    renderer.sharedMaterial = petalMaterial;
                 }
             }
         }

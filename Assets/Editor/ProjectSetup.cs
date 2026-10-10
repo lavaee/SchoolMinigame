@@ -355,10 +355,11 @@ namespace SmallPot.EditorTools
         /// <summary>
         /// Builds the one scene the game needs.
         ///
-        /// It deliberately contains a single GameObject: the camera, the lighting, the window and pot
-        /// geometry, and the whole interface are constructed at runtime from the data files. That is
-        /// what makes "replace the data, change the game" true for the visuals as well as the text - a
-        /// sixth pot state needs a new entry in config.json, not a new prefab.
+        /// It contains the camera, the lighting, the window and pot geometry, and the whole interface as
+        /// ordinary objects, generated once by the scene baker and editable from then on. The generator
+        /// stays behind a menu item for a clean slate, but the shipped scene is authored content: a sixth
+        /// pot state needs a stage in config.json and a string, and a new model or a sound is an
+        /// inspector job.
         /// </summary>
         public static void CreateMainScene(TMP_FontAsset primaryFont, Material spriteMaterial)
         {
@@ -368,7 +369,9 @@ namespace SmallPot.EditorTools
             GameBootstrap bootstrap = app.AddComponent<GameBootstrap>();
             bootstrap.FontAsset = primaryFont;
             bootstrap.SpriteMaterial = spriteMaterial;
-            bootstrap.BuildOnStart = true;
+
+            // save: false, because the scene is written a few lines below.
+            SceneBaker.BuildIntoScene(bootstrap, save: false);
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) ?? "Assets/Scenes");
             EditorSceneManager.MarkSceneDirty(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
