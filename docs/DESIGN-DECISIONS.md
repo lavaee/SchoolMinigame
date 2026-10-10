@@ -124,11 +124,10 @@ if nothing writes to them. So the server owns a working copy in `server/content/
 first use, and the admin page edits that. Reset restores any file from the supplied copy, so the fallback
 is one button rather than a re-clone.
 
-Pushing is deliberately separate from saving. A designer edits several fields, looks at the preview, and
-then decides to push — bumping a revision number that a running client polls every ten seconds. The client
-is never interrupted: a round set in progress and a report on screen are left alone, and the reload
-happens between them. The notice is a three-second chip, because a player who is mid-something should not
-be stopped by a content change they did not ask for.
+Pushing is deliberately separate from saving. A designer edits several fields, looks at the preview, and then
+decides to push. That bumps a revision number, and the push itself reaches every running client inside a round
+trip, because the app is not asking on a timer — it is waiting on an answer. Saving therefore costs a running
+player nothing at all, and pushing costs them a card they can take whenever they like.
 
 The admin page mirrors the shape rules in `Assets/Scripts/Core/PlantVisuals.cs` to draw its silhouettes.
 That is a deliberate duplication, and it is the one place in this project where two sources of truth
@@ -197,6 +196,31 @@ time and the drops it had earned, and the retry loop resumes from exactly where 
 costing the player the session. The pause is done through time rather than by tearing anything down, which
 is why the minigame's clock reads scaled time — with the clock at its normal speed that is the same number
 it always was.
+
+## Why does the app wait on an answer instead of asking every few seconds?
+
+Because ten seconds is a long time to look at a screen and wonder whether the button worked. The app used to
+ask the server "which revision are you serving?" on a timer, so a push was felt anywhere between instantly and
+ten seconds later — five on average, and never at the moment you were showing somebody.
+
+It asks that question once now and leaves it open. The server parks the request and answers it the instant a
+push happens, so the news travels one round trip: measured on the phone, nine milliseconds after the push
+began. The design pays for that with one obligation — the request has to be able to come back empty. The
+server holds it for a while (`updateWatchHoldSeconds`, twenty seconds by default) and then answers "still the
+same revision", so an idle app re-issues rather than trusting a connection that a network may have dropped in
+the meantime. Anything that fails to answer means "nothing is waiting", exactly as a failed poll did, and the
+separate connection watch is still the thing that decides the server has gone.
+
+This is not a WebSocket. A socket is the right tool for a channel that both ends talk on; this is a one-way
+announcement to a couple of phones on one desk. A held request gets there with no handshake, no framing, no
+dependency, and over the same HTTP path the content already travels — including `adb reverse` and the local
+network, both of which are already proven on the device. If something ever needs to travel the other way, the
+seam is one function.
+
+The offer is made even mid-round now, rather than waiting for a quiet moment. That is safe because of two
+things that were already true: the card stops the clock rather than the round, and applying content defers
+the interface rebuild until the round set closes. A round cannot be stranded by an update the player chose to
+take, so there is no reason to make them wait for one to be offered.
 
 ## Why does a push wait for a button?
 

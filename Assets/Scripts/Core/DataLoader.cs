@@ -177,16 +177,8 @@ namespace SmallPot
         /// </summary>
         public IEnumerator CheckVersion(string serverUrlOverride, Action<int> done)
         {
-            // An explicit override wins, then the address that last answered.
-            string baseUrl = FirstNonEmpty(serverUrlOverride, LastServerUrl);
-
-            if (string.IsNullOrEmpty(baseUrl) && _serverCandidates.Count > 0)
-            {
-                // Nothing has answered yet, so keep trying: an app that started before the server did
-                // should connect on its own rather than waiting for someone to reload by hand.
-                yield return Probe(_serverCandidates, url => LastServerUrl = url);
-                baseUrl = LastServerUrl;
-            }
+            string baseUrl = null;
+            yield return ResolveBaseUrl(serverUrlOverride, url => baseUrl = url);
 
             if (string.IsNullOrEmpty(baseUrl))
             {
@@ -200,13 +192,72 @@ namespace SmallPot
                 value => text = value,
                 _ => { });
 
-            if (string.IsNullOrEmpty(text) || !JsonValue.TryParse(text, out JsonValue root, out _))
+            done?.Invoke(ReadVersion(text));
+        }
+
+        /// <summary>
+        /// Waits for the server's content revision to stop matching <paramref name="since"/>.
+        ///
+        /// The server holds this request open and the push itself answers it, so the app hears about new
+        /// content in the time one round trip takes rather than, on average, half a poll interval. A
+        /// negative <paramref name="since"/> asks "what is the revision now?" and is answered at once, which
+        /// is how the first watch establishes its baseline.
+        ///
+        /// Reports -1 when nothing answered, exactly as <see cref="CheckVersion"/> does, because a watch
+        /// that failed only means "nothing is waiting".
+        /// </summary>
+        public IEnumerator AwaitVersion(string serverUrlOverride, int since, float holdSeconds, Action<int> done)
+        {
+            string baseUrl = null;
+            yield return ResolveBaseUrl(serverUrlOverride, url => baseUrl = url);
+
+            if (string.IsNullOrEmpty(baseUrl))
             {
                 done?.Invoke(-1);
                 yield break;
             }
 
-            done?.Invoke(root["version"].AsInt(-1));
+            int hold = Mathf.Clamp(Mathf.RoundToInt(holdSeconds), 2, 60);
+            string text = null;
+            yield return FetchRemote(
+                baseUrl.TrimEnd('/') + "/api/watch?version=" + since + "&hold=" + hold,
+                value => text = value,
+                _ => { },
+                // The request has to outlive the hold, or every quiet watch would come back as a failure
+                // instead of as "nothing has changed yet".
+                hold + 6f);
+
+            done?.Invoke(ReadVersion(text));
+        }
+
+        /// <summary>The revision in a /version or /api/watch answer, or -1 when there is none to read.</summary>
+        private static int ReadVersion(string text)
+        {
+            if (string.IsNullOrEmpty(text) || !JsonValue.TryParse(text, out JsonValue root, out _))
+            {
+                return -1;
+            }
+
+            return root["version"].AsInt(-1);
+        }
+
+        /// <summary>
+        /// The address to talk to: the override, then whatever last answered, then a fresh probe.
+        ///
+        /// The probe is what lets an app that started before the server did connect on its own instead of
+        /// waiting for someone to reload by hand.
+        /// </summary>
+        private IEnumerator ResolveBaseUrl(string serverUrlOverride, Action<string> done)
+        {
+            string baseUrl = FirstNonEmpty(serverUrlOverride, LastServerUrl);
+
+            if (string.IsNullOrEmpty(baseUrl) && _serverCandidates.Count > 0)
+            {
+                yield return Probe(_serverCandidates, url => LastServerUrl = url);
+                baseUrl = LastServerUrl;
+            }
+
+            done?.Invoke(baseUrl);
         }
 
         /// <summary>
@@ -420,10 +471,11 @@ namespace SmallPot
             output[fileName] = file;
         }
 
-        private IEnumerator FetchRemote(string url, Action<string> onSuccess, Action<string> onError)
+        private IEnumerator FetchRemote(string url, Action<string> onSuccess, Action<string> onError, float timeoutSeconds = -1f)
         {
             UnityWebRequest request = UnityWebRequest.Get(url);
-            request.timeout = Mathf.Max(1, Mathf.CeilToInt(RemoteTimeoutSeconds));
+            request.timeout = Mathf.Max(
+                1, Mathf.CeilToInt(timeoutSeconds > 0f ? timeoutSeconds : RemoteTimeoutSeconds));
 
             // The server always serves the current file; caching is this class's job, not HTTP's.
             request.SetRequestHeader("Cache-Control", "no-cache");

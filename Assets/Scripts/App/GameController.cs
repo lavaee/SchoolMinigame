@@ -79,14 +79,6 @@ namespace SmallPot
 
         public static bool SuppressServerGate;
 
-        private float _nextVersionCheck;
-
-        /// <summary>
-        /// How often the running game asks the server which revision it is serving. Often enough that a
-        /// push is felt within a few seconds of the designer pressing the button, rare enough to be free.
-        /// </summary>
-        private const float VersionPollSeconds = 10f;
-
         private GameConfig Config => _bundle?.Config ?? GameConfig.Defaults();
         private StringsStore Strings => _bundle?.Strings ?? StringsStore.CreateEmpty();
 
@@ -137,36 +129,33 @@ namespace SmallPot
         }
 
         /// <summary>
-        /// Watches the server's content revision and reloads when it changes.
+        /// Waits on the server for the content revision to change, and offers whatever arrives.
         ///
-        /// Deliberately quiet: it waits for a moment when nothing is in progress, never interrupts a round
-        /// set or a report, and announces itself with a brief note rather than a dialog.
+        /// This used to ask every ten seconds, so a push was felt anywhere between instantly and ten seconds
+        /// later. The person pushing is usually looking at the screen, so that delay read as "it did not
+        /// work". The server holds this question open now and the push itself answers it, which is what
+        /// makes a push arrive in the time one round trip takes.
+        ///
+        /// The offer is made even in the middle of a round. The card stops the clock rather than the round,
+        /// and taking it defers the interface rebuild until the round set closes, so a round can never be
+        /// stranded by an update that the player chose to take.
         /// </summary>
         private IEnumerator VersionWatch()
         {
-            _nextVersionCheck = Time.realtimeSinceStartup + VersionPollSeconds;
-
             while (true)
             {
-                yield return new WaitUntil(() => Time.realtimeSinceStartup >= _nextVersionCheck);
-                _nextVersionCheck = Time.realtimeSinceStartup + VersionPollSeconds;
-
-                if (_session != null && _session.Running)
-                {
-                    continue;
-                }
-
+                // A negative version asks "which revision is it now?" and is answered at once, which is how
+                // the first watch learns its baseline: an app that starts after a push has nothing to be
+                // told about, and should not offer the content it already has.
                 int version = -1;
-                yield return _loader.CheckVersion(_save.ServerUrlOverride, reported => version = reported);
+                yield return _loader.AwaitVersion(
+                    _save.ServerUrlOverride, _contentVersion, UpdateWatchHoldSeconds, reported => version = reported);
 
                 if (version < 0)
                 {
-                    continue;
-                }
-
-                if (_contentVersion < 0)
-                {
-                    _contentVersion = version;
+                    // Nothing answered. The connection watch owns the gate; all this owes a dead address is
+                    // not to spin against it.
+                    yield return new WaitForSecondsRealtime(ConnectionCheckSeconds);
                     continue;
                 }
 
@@ -175,7 +164,14 @@ namespace SmallPot
                     continue;
                 }
 
+                bool baseline = _contentVersion < 0;
                 _contentVersion = version;
+
+                if (baseline)
+                {
+                    continue;
+                }
+
                 Log.Info($"Content revision {version} was pushed; offering it instead of applying it.");
                 OfferUpdate(version);
             }
@@ -350,6 +346,17 @@ namespace SmallPot
             _bundle != null && _bundle.Dev != null && _bundle.Dev.ConnectionCheckSeconds >= 1f
                 ? _bundle.Dev.ConnectionCheckSeconds
                 : 3f;
+
+        /// <summary>
+        /// How long the server is asked to hold a content watch open, from data/dev.json.
+        ///
+        /// Long enough that an idle app is not churning through requests, short enough that a connection
+        /// dropped somewhere along the way is noticed by the watch rather than trusted forever.
+        /// </summary>
+        private float UpdateWatchHoldSeconds =>
+            _bundle != null && _bundle.Dev != null && _bundle.Dev.UpdateWatchHoldSeconds >= 2f
+                ? _bundle.Dev.UpdateWatchHoldSeconds
+                : 20f;
 
         /// <summary>Puts the gate up mid-game, because a server that was answering has stopped.</summary>
         private void ConnectionLost()

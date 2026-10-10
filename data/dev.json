@@ -4,5 +4,6 @@
   "showDataSourceInfo": true,
   "showDebugPanel": true,
   "requireServer": true,
-  "connectionCheckSeconds": 3
+  "connectionCheckSeconds": 3,
+  "updateWatchHoldSeconds": 20
 }

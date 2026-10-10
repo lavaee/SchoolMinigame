@@ -252,6 +252,22 @@ namespace SmallPot.Tests
         }
 
         [Test]
+        public void UpdateWatchHoldSecondsComesFromTheFileAndNeverRunsAway()
+        {
+            Assert.AreEqual(20f, DevSettings.FromJson(JsonValue.Parse("{}")).UpdateWatchHoldSeconds, 0.001f);
+            Assert.AreEqual(
+                30f,
+                DevSettings.FromJson(JsonValue.Parse("{\"updateWatchHoldSeconds\":30}")).UpdateWatchHoldSeconds,
+                0.001f);
+
+            // A hold of a second or less is a poll with extra steps, which is the thing this replaced.
+            Assert.AreEqual(
+                20f,
+                DevSettings.FromJson(JsonValue.Parse("{\"updateWatchHoldSeconds\":1}")).UpdateWatchHoldSeconds,
+                0.001f);
+        }
+
+        [Test]
         public void CandidateUrlsIsEmptyWhenNoServerIsConfigured()
         {
             // No address means no network attempts at all, which is what keeps a bundled-only build

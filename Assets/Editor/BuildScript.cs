@@ -225,7 +225,9 @@ namespace SmallPot.EditorTools
             text.AppendLine($"  \"showDebugPanel\": {(supplied.ShowDebugPanel ? "true" : "false")},");
             text.AppendLine($"  \"requireServer\": {(supplied.RequireServer ? "true" : "false")},");
             text.AppendLine(
-                $"  \"connectionCheckSeconds\": {supplied.ConnectionCheckSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}");
+                $"  \"connectionCheckSeconds\": {supplied.ConnectionCheckSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)},");
+            text.AppendLine(
+                $"  \"updateWatchHoldSeconds\": {supplied.UpdateWatchHoldSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}");
             text.AppendLine("}");
 
             string path = Path.Combine(Application.streamingAssetsPath, "data", "dev.json");

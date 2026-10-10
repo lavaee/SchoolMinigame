@@ -1655,7 +1655,11 @@
             return;
         }
 
-        banner('Pushed version ' + payload.version + '. The app picks it up on its next poll.');
+        banner('Pushed version ' + payload.version + '. ' + (payload.delivered > 0
+            ? payload.delivered + (payload.delivered === 1
+                ? ' running app was told at once.'
+                : ' running apps were told at once.')
+            : 'No app is watching this second; the next one to open picks it up.'));
         await load(false);
     }
 

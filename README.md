@@ -153,10 +153,12 @@ first use, and that is what it serves and what the admin page edits:
 * a live preview shows the growth chain and how many watered mornings full bloom takes, the economy
   (what one session earns against what watering costs), and **a silhouette of every pot state** drawn
   from the same shape rules the game uses, so you can see whether five states still look like five;
-* **Push to clients** bumps a revision. A running client polls it and then *offers* the update: a card that
-  names the revision, one sentence saying the game has stopped where it is, and a button that takes it.
-  Nothing is applied behind the player's back, and nothing is lost while they decide — the round clock stops
-  with the card and picks up where it left off;
+* **Push to clients** bumps a revision, and every running client hears about it in the time one round trip
+  takes: the app holds a request open and the push is what answers it, so there is no poll interval to sit
+  through. What arrives is *offered* rather than applied — a card that names the revision, one sentence
+  saying the game has stopped where it is, and a button that takes it. Nothing is applied behind the
+  player's back, and nothing is lost while they decide: the round clock stops with the card and picks up
+  where it left off;
 
 Saving a file does not push it, and a file that is invalid JSON, or that breaks a rule such as a stage
 with no matching `mornings` entry, is refused and left untouched. Reset restores any file to the

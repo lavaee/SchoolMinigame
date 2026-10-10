@@ -15,7 +15,8 @@
  *
  * Routes the Unity client depends on, exactly:
  *   GET /<file>.json  the working copy, no-store, ETag honoured
- *   GET /version      {"version": n, "pushedAt": iso|null} - the client reloads when n changes
+ *   GET /version      {"version": n, "pushedAt": iso|null} - what the revision is at this instant
+ *   GET /api/watch    held open until the revision changes, so a push is felt in one round trip
  *   GET /health       liveness
  *
  * Routes for the admin page:
@@ -24,7 +25,7 @@
  *   GET /files                  the plain-text listing of what is served
  *   GET /api/state              everything the editor needs, including validation
  *   POST /api/save              validate and write one working-copy file
- *   POST /api/push              bump the version so clients reload
+ *   POST /api/push              bump the version, and answer every client that is watching
  *   POST /api/reset, /api/resetAll   restore from the pristine copy
  *
  * Everything is zero-dependency and synchronous on purpose: this is a single-user tool for a phone on
@@ -125,12 +126,26 @@ const KNOWN_PLACEHOLDERS = Array.from(
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
+/** How long a watch is held when the client does not say, in seconds. */
+const DEFAULT_WATCH_HOLD_SECONDS = 20;
+
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
 
 function sha256(buffer) {
     return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+/**
+ * How long a watch may be held, in seconds. The client asks and the server decides, because a watch that
+ * never expired would leave a connection the network has already dropped looking like patience.
+ */
+function clampHoldSeconds(seconds) {
+    if (!Number.isFinite(seconds)) {
+        return DEFAULT_WATCH_HOLD_SECONDS;
+    }
+    return Math.min(60, Math.max(2, Math.floor(seconds)));
 }
 
 function capitalize(text) {
@@ -787,6 +802,75 @@ function createServer(options) {
     const store = createStore(paths, log);
     store.seed();
 
+    // Clients holding a request open, waiting for the revision to change. A push answers them in the same
+    // tick, which is the difference between "instant" and "whenever the next poll happens to fall".
+    const watchers = new Set();
+
+    /** Answers every waiting client with the revision that is current now, and says how many there were. */
+    function releaseWatchers() {
+        const waiting = Array.from(watchers);
+        for (const watcher of waiting) {
+            watcher.finish(store.version(), 'push');
+        }
+        return waiting.length;
+    }
+
+    /**
+     * Holds one client's request open until the revision changes.
+     *
+     * The client says which revision it already has. If that is not the current one the answer is
+     * immediate, which is also how a client that has never seen this server establishes its baseline.
+     * Otherwise the request is parked and the push itself answers it, so the app hears about new content
+     * in the time one round trip takes rather than whenever a timer happens to fire.
+     *
+     * The hold expires on its own, so a client re-issues rather than trusting a connection that may have
+     * been dropped somewhere along the way. A client that hangs up is dropped from the set, so a dead
+     * socket is never written to.
+     */
+    function awaitVersion(request, response, url) {
+        const since = Number(url.searchParams.get('version'));
+        const hold = clampHoldSeconds(Number(url.searchParams.get('hold')));
+        const started = Date.now();
+
+        const reply = (version, reason) => {
+            sendJson(request, response, 200, {
+                version,
+                pushedAt: store.pushedAt(),
+                changed: version !== since,
+                reason,
+                heldMs: Date.now() - started
+            });
+        };
+
+        if (!Number.isFinite(since) || since < 0 || since !== store.version()) {
+            reply(store.version(), 'now');
+            return true;
+        }
+
+        let timer = null;
+        const watcher = {
+            finish(version, reason) {
+                // Removal is the guard: whichever of the push and the timer arrives second finds the
+                // watcher already gone and does nothing, so one request is never answered twice.
+                if (!watchers.delete(watcher)) {
+                    return;
+                }
+                clearTimeout(timer);
+                reply(version, reason);
+            }
+        };
+
+        watchers.add(watcher);
+        timer = setTimeout(() => watcher.finish(store.version(), 'expired'), hold * 1000);
+        response.on('close', () => {
+            if (watchers.delete(watcher)) {
+                clearTimeout(timer);
+            }
+        });
+
+        return true;
+    }
+
     /** The full admin view: version, hashes, and the validation of every managed file. */
     function buildState() {
         const texts = {};
@@ -848,7 +932,7 @@ function createServer(options) {
         return false;
     }
 
-    function handleApi(request, response, route) {
+    function handleApi(request, response, route, url) {
         if (route === '/api/state' && request.method === 'GET') {
             sendJson(request, response, 200, buildState());
             return true;
@@ -900,6 +984,10 @@ function createServer(options) {
             return true;
         }
 
+        if (route === '/api/watch' && request.method === 'GET') {
+            return awaitVersion(request, response, url);
+        }
+
         if (route === '/api/push' && request.method === 'POST') {
             const state = buildState();
             const invalid = state.files.filter(file => !file.valid).map(file => file.name);
@@ -912,8 +1000,14 @@ function createServer(options) {
                 return true;
             }
             const pushed = store.push();
-            log(`  pushed version ${pushed.version}`);
-            sendJson(request, response, 200, { ok: true, version: pushed.version, pushedAt: pushed.pushedAt });
+            const delivered = releaseWatchers();
+            log(`  pushed version ${pushed.version}; told ${delivered} watching client(s)`);
+            sendJson(request, response, 200, {
+                ok: true,
+                version: pushed.version,
+                pushedAt: pushed.pushedAt,
+                delivered
+            });
             return true;
         }
 
@@ -991,7 +1085,7 @@ function createServer(options) {
         }
 
         if (route.startsWith('/api/')) {
-            if (handleApi(request, response, route)) {
+            if (handleApi(request, response, route, url)) {
                 return;
             }
             sendJson(request, response, 404, { ok: false, error: `Unknown API route ${route}.` });

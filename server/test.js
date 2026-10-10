@@ -157,6 +157,10 @@ function postJson(requestPath, value) {
     }));
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // ---------------------------------------------------------------------------
 // The suite
 // ---------------------------------------------------------------------------
@@ -678,6 +682,66 @@ async function run(workingDirectory, statePath) {
         server.resolveMornings({ growth: { defaultMorningsPerTransition: 4 } }, 'x', 'y').value, 4);
     equal('zero mornings is clamped to one',
         server.resolveMornings({ growth: { mornings: { aToB: 0 } } }, 'a', 'b').value, 1);
+
+    section('Telling a watching client the moment content changes');
+
+    // A client that has never seen this server is answered straight away: that answer is also the baseline
+    // it goes on to watch from.
+    const firstWatch = await getJson('/api/watch?version=-1');
+    equal('a watch with no version is answered at once', firstWatch.status, 200);
+    equal('  naming the current revision', firstWatch.json.version, (await getJson('/version')).json.version);
+
+    // The real thing: a watch at the current revision is held, and a push is what releases it.
+    const watchingFrom = firstWatch.json.version;
+    const watchStartedAt = Date.now();
+    let watchAnsweredAt = null;
+    const held = request('GET', `/api/watch?version=${watchingFrom}&hold=15`).then(response => {
+        watchAnsweredAt = Date.now();
+        return response;
+    });
+
+    await sleep(400);
+    equal('a watch at the current revision is held open', watchAnsweredAt, null);
+
+    const pushedForWatchers = await postJson('/api/push', {});
+    const released = await held;
+    const latency = watchAnsweredAt - watchStartedAt;
+    const releasedJson = JSON.parse(released.body.toString('utf8'));
+    check('the push answers the watch that was waiting',
+        released.status === 200 && releasedJson.changed === true, `status ${released.status}`);
+    equal('  with the revision that push created', releasedJson.version, pushedForWatchers.json.version);
+    check('  inside a round trip rather than a poll interval', latency < 1500, `took ${latency} ms`);
+    equal('  and the push says how many clients it told', pushedForWatchers.json.delivered, 1);
+
+    const pushAlone = await postJson('/api/push', {});
+    equal('a push with nobody watching says nobody was told', pushAlone.json.delivered, 0);
+
+    // The hold expires by itself, so a client re-issues rather than trusting a connection that may have
+    // been dropped. Two seconds is the shortest hold the server accepts.
+    const expireStartedAt = Date.now();
+    const expired = await request('GET', `/api/watch?version=${pushAlone.json.version}&hold=2`);
+    const waited = Date.now() - expireStartedAt;
+    const expiredJson = JSON.parse(expired.body.toString('utf8'));
+    check('a watch that nothing happens to answers when its hold runs out', waited >= 1900, `waited ${waited} ms`);
+    equal('  on the same revision', expiredJson.version, pushAlone.json.version);
+    equal('  saying nothing changed', expiredJson.changed, false);
+    equal('  and why it answered', expiredJson.reason, 'expired');
+
+    // A client that hangs up while waiting must be dropped, or a dead socket gets written to and the
+    // server cannot shut down. The count a push reports is how that is observable from the outside.
+    const abandoned = http.request({
+        host: '127.0.0.1',
+        port,
+        method: 'GET',
+        path: `/api/watch?version=${pushAlone.json.version}&hold=30`
+    });
+    abandoned.on('error', () => { });
+    await new Promise(resolve => abandoned.end(resolve));
+    await sleep(250);
+    abandoned.destroy();
+    await sleep(250);
+    const afterAbandon = await postJson('/api/push', {});
+    equal('a client that hung up while waiting is forgotten', afterAbandon.json.delivered, 0);
 }
 
 // ---------------------------------------------------------------------------

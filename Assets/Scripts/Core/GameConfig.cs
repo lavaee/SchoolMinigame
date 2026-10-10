@@ -438,6 +438,16 @@ namespace SmallPot
         /// </summary>
         public float ConnectionCheckSeconds = 3f;
 
+        /// <summary>
+        /// How long the server is asked to hold a content watch open, in seconds.
+        ///
+        /// The app no longer asks "has anything changed?" on a timer. It asks once, and the server answers
+        /// when a push happens - or when this many seconds have passed, whichever comes first. So this is
+        /// the ceiling on how stale an idle app's knowledge can be; the floor is one round trip, which is
+        /// why a push now feels immediate.
+        /// </summary>
+        public float UpdateWatchHoldSeconds = 20f;
+
         public static DevSettings FromJson(JsonValue root)
         {
             var settings = new DevSettings();
@@ -484,6 +494,16 @@ namespace SmallPot
                 if (seconds >= 1f)
                 {
                     settings.ConnectionCheckSeconds = seconds;
+                }
+            }
+
+            if (root.Has("updateWatchHoldSeconds"))
+            {
+                float seconds = GameConfig.ReadFloat(
+                    root, "updateWatchHoldSeconds", settings.UpdateWatchHoldSeconds, new List<string>());
+                if (seconds >= 2f)
+                {
+                    settings.UpdateWatchHoldSeconds = seconds;
                 }
             }
 
