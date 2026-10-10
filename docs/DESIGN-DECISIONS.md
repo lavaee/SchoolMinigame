@@ -72,6 +72,54 @@ cannot be memorised and the tests can seed it. One timer covers all five rounds 
 timer would punish a slow reader five times over; the clock is part of the tension, not a second
 obstacle. Wrong answers show the right word separately, in the same card, and subtract nothing.
 
+## Why is the scene authored now, when it used to be built at launch?
+
+Because the first version optimised for the wrong thing. Building the world in code made "replace the data
+and the game changes" true down to the geometry, which was a good demonstration — but it also meant there
+was nothing in the scene to edit. No model to swap, no clip to attach, no widget to re-skin. Anyone taking
+the project on would have had to work through the generator to change a leaf.
+
+So the generator runs once, from a menu item, and bakes what it produces into the scene as ordinary
+objects. The runtime then *binds* instead of creating: `PotRig` is a component whose references are
+visible in the inspector, and the builders are idempotent — they find a widget by name and update it if it
+is there, and only create it if it is not. Running the same builder in the editor and at startup is what
+keeps the two in step: the editor pass puts the interface in the scene, the startup pass refreshes the
+labels from the current data without replacing anything you re-skinned.
+
+Three details follow from that, and all three are the kind of thing that looks like a bug until you know
+why:
+
+* **A material created in code cannot be saved into a scene.** It carries `HideAndDontSave`, so the scene
+  would come back with a white surface rather than a missing one. The baker writes real `.mat`, `.asset`
+  and `.png` files instead.
+* **Nine-slice borders and pivots do not survive a naive import.** The baker copies the border, the pivot
+  and the mesh type from the sprite it generated, so the baked sprite is the same picture, and replacing
+  one PNG with your own art is a drop-in.
+* **`CreateMissingParts` is off in the shipped scene.** While it is on, a deleted part silently reappears
+  on the next launch, which is exactly the wrong behaviour once the art is yours.
+
+The cost is honest: a new *visual stage* is still pure data, because the stage profile resolves
+parametrically, but a new *part* — a fruit, a trellis — is placed in the scene.
+
+## Why does the server keep its own copy of the data?
+
+The supplied files in `data/` are checked byte-for-byte by a test, and that check is only worth something
+if nothing writes to them. So the server owns a working copy in `server/content/`, seeded from `data/` on
+first use, and the admin page edits that. Reset restores any file from the supplied copy, so the fallback
+is one button rather than a re-clone.
+
+Pushing is deliberately separate from saving. A designer edits several fields, looks at the preview, and
+then decides to push — bumping a revision number that a running client polls every ten seconds. The client
+is never interrupted: a round set in progress and a report on screen are left alone, and the reload
+happens between them. The notice is a three-second chip, because a player who is mid-something should not
+be stopped by a content change they did not ask for.
+
+The admin page mirrors the shape rules in `Assets/Scripts/Core/PlantVisuals.cs` to draw its silhouettes.
+That is a deliberate duplication, and it is the one place in this project where two sources of truth
+exist: a preview drawn by calling into Unity is not possible from a browser, and a designer editing a
+sixth stage needs to see what six stages look like. The mirror is pinned by tests on both sides — the shape
+numbers, the default-mornings fallback and the thirst posture are asserted for the same values.
+
 ## What did you deliberately not build?
 
 Accounts, cloud saves, leaderboards and any server-side game state. The server exists for one reason: to
@@ -79,8 +127,9 @@ prove that replacing a data file changes the running game, which is the acceptan
 network failure degrades silently to the bundled files with a small status chip, never a modal dialog and
 never a blame message. Even the reload button is a convenience; the game never depends on it.
 
-Sound is the other omission: adding it would have meant either unlicensed filler or time taken from the
-parts of the brief that are graded.
+Sound clips are the other omission: adding them would have meant either unlicensed filler or time taken
+from the parts of the brief that are graded. What ships instead is the hook — `AudioDirector` has a slot
+per moment, silent until filled.
 
 ## What would you do with a fourth day?
 
@@ -93,10 +142,13 @@ can produce, so this would be polish rather than a fix).
 | Path | What it is |
 | --- | --- |
 | `Assets/Scripts/Core` | rules and data: JSON, config, plant state, visuals, strings, pairs, save, loader |
-| `Assets/Scripts/App` | the runtime scene: camera, lighting, pot rig, controller |
-| `Assets/Scripts/UI` | canvas, HUD, minigame, settings, procedural sprites |
-| `Assets/Editor` | build script, one-shot project setup, screenshot harness |
+| `Assets/Scripts/App` | the scene's behaviour: pot rig, pot view, bootstrap, controller, sound |
+| `Assets/Scripts/UI` | the interface builders, which create or update in place |
+| `Assets/Editor` | build script, project setup, scene baker, screenshot harness |
+| `Assets/Scenes/Main.unity` | the authored world and interface |
+| `Assets/Resources/SmallPotSprites` | 21 replaceable PNGs, one per interface icon |
+| `Assets/Materials/Generated`, `Assets/Meshes/Generated` | baked materials and meshes |
 | `Assets/Tests/EditMode` | 72 tests over the rules above |
 | `data/` | the supplied files, plus our two optional ones |
 | `tools/` | verify, sync, build, serve |
-| `server/` | the zero-dependency content server |
+| `server/` | the zero-dependency content server, its admin page and 215 checks |
