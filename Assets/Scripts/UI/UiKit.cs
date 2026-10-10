@@ -131,6 +131,13 @@ namespace SmallPot
                 var existing = parent.Find(name) as RectTransform;
                 if (existing != null)
                 {
+                    // It was in the scene before this build, so it has been authored once already and is
+                    // left exactly as it was found.
+                    if (existing.GetComponent<AuthoredWidget>() == null)
+                    {
+                        existing.gameObject.AddComponent<AuthoredWidget>();
+                    }
+
                     return existing;
                 }
             }
@@ -140,9 +147,21 @@ namespace SmallPot
             return (RectTransform)gameObject.transform;
         }
 
+        /// <summary>
+        /// True when a widget was already in the scene. From then on the scene owns its layout and its
+        /// component parameters; only what comes from the data is refreshed on top.
+        /// </summary>
+        private static bool HandedOver(RectTransform rect) =>
+            rect != null && rect.GetComponent<AuthoredWidget>() != null;
+
         /// <summary>Fills the parent, inset by the supplied amounts on each side.</summary>
         public static RectTransform Stretch(RectTransform rect, float left = 0f, float bottom = 0f, float right = 0f, float top = 0f)
         {
+            if (HandedOver(rect))
+            {
+                return rect;
+            }
+
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(0.5f, 0.5f);
@@ -154,6 +173,11 @@ namespace SmallPot
         /// <summary>Pins a fixed-size element to a point in the parent, using that point as the pivot.</summary>
         public static RectTransform Place(RectTransform rect, Vector2 anchor, Vector2 offset, Vector2 size)
         {
+            if (HandedOver(rect))
+            {
+                return rect;
+            }
+
             rect.anchorMin = anchor;
             rect.anchorMax = anchor;
             rect.pivot = anchor;
@@ -165,6 +189,11 @@ namespace SmallPot
         /// <summary>A full-width band pinned to the top or the bottom of the parent.</summary>
         public static RectTransform Band(RectTransform rect, bool fromTop, float distance, float height, float margin = Margin)
         {
+            if (HandedOver(rect))
+            {
+                return rect;
+            }
+
             float y = fromTop ? 1f : 0f;
             rect.anchorMin = new Vector2(0f, y);
             rect.anchorMax = new Vector2(1f, y);
@@ -175,14 +204,20 @@ namespace SmallPot
         }
 
         /// <summary>
-        /// A rounded panel. The sprite is only assigned when the image has none, so a background you
-        /// replaced with your own art survives every rebuild; the colour keeps being driven, because the
-        /// colour is what carries state.
+        /// A rounded panel. Everything about how it looks is authored once; a panel that is already in the
+        /// scene keeps its own sprite, its own type and its own colour, so the look can be finished by hand
+        /// in the scene without a rebuild fighting it. State colours are applied by the views directly onto
+        /// the image, which this does not touch.
         /// </summary>
         public static Image Panel(string name, Transform parent, Color color, int radius = 22)
         {
             RectTransform rect = Node(name, parent);
             var image = GetOrAdd<Image>(rect.gameObject);
+
+            if (HandedOver(rect))
+            {
+                return image;
+            }
 
             if (image.sprite == null)
             {
@@ -198,6 +233,12 @@ namespace SmallPot
         {
             RectTransform rect = Node(name, parent);
             var image = GetOrAdd<Image>(rect.gameObject);
+
+            if (HandedOver(rect))
+            {
+                return image;
+            }
+
             if (image.sprite == null)
             {
                 // An Image with no sprite draws nothing at all, so a solid rectangle needs the one-pixel one.
@@ -212,6 +253,11 @@ namespace SmallPot
         {
             RectTransform rect = Node(name, parent);
             var image = GetOrAdd<Image>(rect.gameObject);
+
+            if (HandedOver(rect))
+            {
+                return image;
+            }
 
             if (image.sprite == null)
             {
@@ -259,24 +305,30 @@ namespace SmallPot
         {
             var text = GetOrAdd<RTLTextMeshPro>(rect.gameObject);
 
-            if (Font != null)
+            // Everything except the words is authored once. Text already in the scene keeps the font, the
+            // size, the colour and the alignment it was given there, and only the string is refreshed, so
+            // hand-tuned copy is not thrown away a frame after the game starts.
+            if (!HandedOver(rect))
             {
-                text.font = Font;
+                if (Font != null)
+                {
+                    text.font = Font;
+                }
+
+                // Flags first, then the content: the component shapes the string as it is assigned.
+                text.Farsi = true;
+                text.FixTags = true;
+                text.PreserveNumbers = true;
+                text.ForceFix = forceFix;
+
+                text.fontSize = fontSize;
+                text.color = color;
+                text.alignment = alignment;
+                text.fontStyle = style;
+                text.enableWordWrapping = wrap;
+                text.raycastTarget = false;
+                text.overflowMode = TextOverflowModes.Overflow;
             }
-
-            // Flags first, then the content: the component shapes the string as it is assigned.
-            text.Farsi = true;
-            text.FixTags = true;
-            text.PreserveNumbers = true;
-            text.ForceFix = forceFix;
-
-            text.fontSize = fontSize;
-            text.color = color;
-            text.alignment = alignment;
-            text.fontStyle = style;
-            text.enableWordWrapping = wrap;
-            text.raycastTarget = false;
-            text.overflowMode = TextOverflowModes.Overflow;
 
             text.text = content ?? string.Empty;
             return text;
@@ -294,26 +346,28 @@ namespace SmallPot
         {
             RectTransform rect = Node(name, parent);
             var image = GetOrAdd<Image>(rect.gameObject);
-
-            if (image.sprite == null)
-            {
-                image.sprite = TextureFactory.RoundedRect();
-                image.type = Image.Type.Sliced;
-            }
-
-            image.color = background;
-
             var button = GetOrAdd<Button>(rect.gameObject);
             button.targetGraphic = image;
 
-            ColorBlock colors = button.colors;
-            colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(0.94f, 0.94f, 0.94f, 1f);
-            colors.pressedColor = new Color(0.85f, 0.85f, 0.85f, 1f);
-            colors.selectedColor = Color.white;
-            colors.disabledColor = new Color(0.72f, 0.72f, 0.72f, 1f);
-            colors.fadeDuration = 0.08f;
-            button.colors = colors;
+            if (!HandedOver(rect))
+            {
+                if (image.sprite == null)
+                {
+                    image.sprite = TextureFactory.RoundedRect();
+                    image.type = Image.Type.Sliced;
+                }
+
+                image.color = background;
+
+                ColorBlock colors = button.colors;
+                colors.normalColor = Color.white;
+                colors.highlightedColor = new Color(0.94f, 0.94f, 0.94f, 1f);
+                colors.pressedColor = new Color(0.85f, 0.85f, 0.85f, 1f);
+                colors.selectedColor = Color.white;
+                colors.disabledColor = new Color(0.72f, 0.72f, 0.72f, 1f);
+                colors.fadeDuration = 0.08f;
+                button.colors = colors;
+            }
 
             if (onClick != null)
             {
@@ -348,6 +402,11 @@ namespace SmallPot
         /// <summary>Adds a soft drop shadow behind a panel, which separates it from the scene behind.</summary>
         public static void AddShadow(RectTransform target, float distance = 8f, float alpha = 0.18f)
         {
+            if (HandedOver(target))
+            {
+                return;
+            }
+
             var shadow = GetOrAdd<Shadow>(target.gameObject);
             shadow.effectColor = new Color(0f, 0f, 0f, alpha);
             shadow.effectDistance = new Vector2(0f, -distance);
@@ -370,14 +429,17 @@ namespace SmallPot
             RectTransform rect = Node(name, parent);
             Stretch(rect);
             var image = GetOrAdd<Image>(rect.gameObject);
-            if (image.sprite == null)
+            if (!HandedOver(rect))
             {
-                // The stretch above is what blocks the clicks; the sprite is what makes the dimming visible,
-                // because an Image with no sprite draws nothing.
-                image.sprite = TextureFactory.Solid();
-            }
+                if (image.sprite == null)
+                {
+                    // The stretch above is what blocks the clicks; the sprite is what makes the dimming
+                    // visible, because an Image with no sprite draws nothing.
+                    image.sprite = TextureFactory.Solid();
+                }
 
-            image.color = Palette.Scrim;
+                image.color = Palette.Scrim;
+            }
 
             if (onClick != null)
             {
@@ -409,13 +471,16 @@ namespace SmallPot
         {
             RectTransform rect = Node(name, parent);
             var panel = GetOrAdd<Image>(rect.gameObject);
-            if (panel.sprite == null)
+            if (!HandedOver(rect) && panel.sprite == null)
             {
                 panel.sprite = TextureFactory.RoundedRect();
                 panel.type = Image.Type.Sliced;
             }
 
-            panel.color = background;
+            if (!HandedOver(rect))
+            {
+                panel.color = background;
+            }
 
             RectTransform viewport = Node("Viewport", rect);
             Stretch(viewport, 18f, 8f, 18f, 8f);
@@ -435,8 +500,13 @@ namespace SmallPot
             field.textViewport = viewport;
             field.textComponent = text;
             field.placeholder = hint;
-            field.lineType = TMP_InputField.LineType.SingleLine;
-            field.characterLimit = 120;
+
+            if (!HandedOver(rect))
+            {
+                field.lineType = TMP_InputField.LineType.SingleLine;
+                field.characterLimit = 120;
+            }
+
             return field;
         }
     }

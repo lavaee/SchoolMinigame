@@ -3,6 +3,8 @@
     "rootNamespace": "SmallPot.Tests",
     "references": [
         "SmallPot.Runtime",
+        "RTLTMPro",
+        "Unity.TextMeshPro",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

@@ -80,6 +80,27 @@ namespace SmallPot.EditorTools
             return material;
         }
 
+        [MenuItem("Window/SmallPot/Rebuild Interface From Code")]
+        public static void RebuildInterfaceFromCode()
+        {
+            // The interface is authored once and then belongs to the scene. This is the way back: it drops
+            // the markers that say "already yours", so the next build lays the widgets out from the code
+            // again - for when the code's layout itself has changed and the scene should follow it.
+            int handed = 0;
+            foreach (AuthoredWidget marker in UnityEngine.Object.FindObjectsOfType<AuthoredWidget>(true))
+            {
+                UnityEngine.Object.DestroyImmediate(marker);
+                handed++;
+            }
+
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+
+            Debug.Log(
+                $"[SmallPot] {handed} widget(s) handed back to the code. Save the scene, then rebuild the " +
+                "interface to author their layout and their parameters again.");
+        }
+
         [MenuItem("Window/SmallPot/Regenerate Font Assets Only")]
         public static void GenerateFontAssetsMenu() => GenerateFontAssets();
 
