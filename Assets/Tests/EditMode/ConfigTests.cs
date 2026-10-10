@@ -172,6 +172,49 @@ namespace SmallPot.Tests
         }
 
         [Test]
+        public void DevSettingsReadsEveryBakedAddress()
+        {
+            // A build bakes the machine's address on the network and 127.0.0.1 for a USB forward, because
+            // which one works depends on how the phone is connected. Blank entries are not addresses.
+            var settings = DevSettings.FromJson(JsonValue.Parse(
+                @"{ ""dataServerUrl"": ""http://192.168.1.20:8787""," +
+                @" ""dataServerUrls"": [""http://192.168.1.20:8787"", """", "" http://127.0.0.1:8787 ""] }"));
+
+            Assert.AreEqual("http://192.168.1.20:8787", settings.DataServerUrl);
+            Assert.AreEqual(2, settings.DataServerUrls.Count);
+            Assert.AreEqual("http://192.168.1.20:8787", settings.DataServerUrls[0]);
+            Assert.AreEqual("http://127.0.0.1:8787", settings.DataServerUrls[1]);
+        }
+
+        [Test]
+        public void CandidateUrlsPutsTheOverrideFirstAndDropsDuplicates()
+        {
+            var settings = new DevSettings
+            {
+                DataServerUrl = "http://192.168.1.20:8787",
+                DataServerUrls = new List<string> { "http://192.168.1.20:8787/", "http://127.0.0.1:8787" }
+            };
+
+            List<string> urls = DataLoader.CandidateUrls("http://10.0.0.9:8787", settings);
+
+            // The override from the settings panel wins, then the baked list in order, and the single
+            // dataServerUrl adds nothing because it is already there.
+            Assert.AreEqual(3, urls.Count);
+            Assert.AreEqual("http://10.0.0.9:8787", urls[0]);
+            Assert.AreEqual("http://192.168.1.20:8787", urls[1]);
+            Assert.AreEqual("http://127.0.0.1:8787", urls[2]);
+        }
+
+        [Test]
+        public void CandidateUrlsIsEmptyWhenNoServerIsConfigured()
+        {
+            // No address means no network attempts at all, which is what keeps a bundled-only build
+            // from spending seconds on requests that can never succeed.
+            Assert.AreEqual(0, DataLoader.CandidateUrls(string.Empty, new DevSettings()).Count);
+            Assert.AreEqual(0, DataLoader.CandidateUrls(string.Empty, null).Count);
+        }
+
+        [Test]
         public void DataFilesAreByteIdenticalToTheOnesSupplied()
         {
             // The brief's files are the contract. If one is ever edited by accident, this fails loudly

@@ -107,7 +107,8 @@ namespace SmallPot
         /// <summary>Kept short so a phone on the wrong network still starts immediately.</summary>
         public float RemoteTimeoutSeconds = 3f;
 
-        private string _serverUrl = string.Empty;
+        /// <summary>Every baked address, in order, so a poll can keep trying while none has answered yet.</summary>
+        private readonly List<string> _serverCandidates = new List<string>();
         private bool _allowRemote;
 
         public static string CacheDirectory => Path.Combine(Application.persistentDataPath, DataFolderName);
@@ -128,22 +129,31 @@ namespace SmallPot
             var localDev = new Dictionary<string, LoadedFile>(StringComparer.OrdinalIgnoreCase);
             yield return Resolve(DevSettings.FileName, string.Empty, localDev);
 
-            string configuredUrl = string.Empty;
+            DevSettings dev = null;
             if (localDev.TryGetValue(DevSettings.FileName, out LoadedFile devFile) && devFile.Ok &&
                 JsonValue.TryParse(devFile.Text, out JsonValue devRoot, out _))
             {
-                configuredUrl = DevSettings.FromJson(devRoot).DataServerUrl;
+                dev = DevSettings.FromJson(devRoot);
             }
 
-            _serverUrl = FirstNonEmpty(serverUrlOverride, configuredUrl);
-            _allowRemote = allowRemote && !string.IsNullOrEmpty(_serverUrl);
-            LastServerUrl = _allowRemote ? _serverUrl : string.Empty;
+            // A phone reaches the same server at a different address depending on how it is connected:
+            // the machine on the network over Wi-Fi, and 127.0.0.1 when the port is forwarded over USB.
+            // Every baked address is tried here and the first that answers is the one used from then on.
+            _serverCandidates.Clear();
+            _serverCandidates.AddRange(CandidateUrls(serverUrlOverride, dev));
+            _allowRemote = allowRemote && _serverCandidates.Count > 0;
+            LastServerUrl = string.Empty;
+
+            if (_allowRemote)
+            {
+                yield return Probe(_serverCandidates, url => LastServerUrl = url);
+            }
 
             // Phase 2: resolve every file, now with the remote layer available.
             var files = new Dictionary<string, LoadedFile>(StringComparer.OrdinalIgnoreCase);
             foreach (string fileName in AllFiles)
             {
-                yield return Resolve(fileName, _allowRemote ? _serverUrl : string.Empty, files);
+                yield return Resolve(fileName, LastServerUrl, files);
             }
 
             done?.Invoke(Build(files));
@@ -162,7 +172,17 @@ namespace SmallPot
         /// </summary>
         public IEnumerator CheckVersion(string serverUrlOverride, Action<int> done)
         {
-            string baseUrl = FirstNonEmpty(LastServerUrl, serverUrlOverride);
+            // An explicit override wins, then the address that last answered.
+            string baseUrl = FirstNonEmpty(serverUrlOverride, LastServerUrl);
+
+            if (string.IsNullOrEmpty(baseUrl) && _serverCandidates.Count > 0)
+            {
+                // Nothing has answered yet, so keep trying: an app that started before the server did
+                // should connect on its own rather than waiting for someone to reload by hand.
+                yield return Probe(_serverCandidates, url => LastServerUrl = url);
+                baseUrl = LastServerUrl;
+            }
+
             if (string.IsNullOrEmpty(baseUrl))
             {
                 done?.Invoke(-1);
@@ -207,6 +227,67 @@ namespace SmallPot
             }
 
             return Build(files);
+        }
+
+        /// <summary>
+        /// The addresses to try, in order: an explicit override first, then whatever the build baked.
+        /// Static and pure so the order can be pinned by a test without touching a network.
+        /// </summary>
+        public static List<string> CandidateUrls(string overrideUrl, DevSettings dev)
+        {
+            var urls = new List<string>();
+
+            Add(overrideUrl);
+            if (dev != null)
+            {
+                foreach (string url in dev.DataServerUrls)
+                {
+                    Add(url);
+                }
+
+                Add(dev.DataServerUrl);
+            }
+
+            return urls;
+
+            void Add(string url)
+            {
+                string trimmed = (url ?? string.Empty).Trim().TrimEnd('/');
+                if (trimmed.Length == 0)
+                {
+                    return;
+                }
+
+                foreach (string existing in urls)
+                {
+                    if (string.Equals(existing, trimmed, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+                }
+
+                urls.Add(trimmed);
+            }
+        }
+
+        /// <summary>
+        /// Tries each address once and reports the first that answers the version endpoint. Every failure
+        /// is silent: the caller still has the cache and the bundled copy to fall back on, and a server
+        /// that is simply not running is a normal way to play, not an error.
+        /// </summary>
+        private IEnumerator Probe(List<string> candidates, Action<string> winner)
+        {
+            foreach (string baseUrl in candidates)
+            {
+                bool answered = false;
+                yield return FetchRemote(baseUrl + "/version", _ => answered = true, _ => { });
+
+                if (answered)
+                {
+                    winner?.Invoke(baseUrl);
+                    yield break;
+                }
+            }
         }
 
         private static string FirstNonEmpty(params string[] values)

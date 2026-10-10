@@ -410,6 +410,14 @@ namespace SmallPot
         /// <summary>Base URL of the data server. Empty means "bundled data only".</summary>
         public string DataServerUrl = string.Empty;
 
+        /// <summary>
+        /// Every address worth trying, in order. A phone reaches the same server at a different address
+        /// depending on how it is connected - the machine's address on the network over Wi-Fi, and
+        /// 127.0.0.1 when the port is forwarded over USB - so the build bakes both and the game keeps
+        /// whichever one answers. Empty means <see cref="DataServerUrl"/> alone is used.
+        /// </summary>
+        public List<string> DataServerUrls = new List<string>();
+
         public bool ShowDataSourceInfo = true;
         public bool ShowDebugPanel = true;
 
@@ -422,6 +430,19 @@ namespace SmallPot
             }
 
             settings.DataServerUrl = (root["dataServerUrl"].AsString(string.Empty) ?? string.Empty).Trim();
+
+            JsonValue addresses = root["dataServerUrls"];
+            if (addresses.IsArray)
+            {
+                for (int i = 0; i < addresses.Count; i++)
+                {
+                    string address = (addresses[i].AsString(string.Empty) ?? string.Empty).Trim();
+                    if (address.Length > 0)
+                    {
+                        settings.DataServerUrls.Add(address);
+                    }
+                }
+            }
             if (root.Has("showDataSourceInfo"))
             {
                 settings.ShowDataSourceInfo = GameConfig.ReadBool(root, "showDataSourceInfo", settings.ShowDataSourceInfo, new List<string>());
