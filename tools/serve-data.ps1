@@ -34,7 +34,19 @@ $adb = Get-ChildItem "F:\Unity\Editors\2022.3.62f3\Editor\Data\PlaybackEngines\A
     -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
 
 if ($adb) {
-    $devices = & $adb devices 2>&1 | Select-String -Pattern "\tdevice$"
+    # stderr is sent to null rather than into the pipeline: the first adb command of a session prints
+    # "daemon not running; starting now" there, and with $ErrorActionPreference = "Stop" that notice would
+    # end this script before the server ever started.
+    $devices = @()
+    try {
+        # Ask for the daemon explicitly: the first adb command of a session starts it, and that first run
+        # usually lists no devices at all.
+        & $adb start-server 2>$null | Out-Null
+        $devices = & $adb devices 2>$null | Select-String -Pattern "\tdevice$"
+    } catch {
+        $devices = @()
+    }
+
     if ($devices) {
         & $adb reverse "tcp:$Port" "tcp:$Port" | Out-Null
         Write-Host "Forwarded tcp:$Port to the attached device (type http://127.0.0.1:$Port into the app to use it)."
@@ -43,35 +55,69 @@ if ($adb) {
     }
 }
 
-# The working copy is what a connected phone actually reads, and our own two files are not the employer's:
-# they are this project's settings and the words for the screens it added, so a server started from an
-# older checkout would serve an older copy of them and the app would be missing strings that exist in the
-# repository. Align them before starting, and leave the employer's files alone.
-foreach ($name in @("dev.json", "strings-extra.json")) {
-    $supplied = Join-Path $root "data\$name"
-    $working = Join-Path $root "server\content\$name"
-    if ((Test-Path $supplied) -and (Test-Path (Split-Path -Parent $working))) {
-        $current = ""
-        if (Test-Path $working) { $current = Get-Content $working -Raw }
-        $wanted = Get-Content $supplied -Raw
-        if ($current -ne $wanted) {
-            Copy-Item $supplied $working -Force
-            Write-Host "Copied data\$name over the server's working copy, which had drifted from it."
-            Write-Host "  Press 'Push to clients' in the admin page to send it to an app that is already open."
-        }
-    }
-}
-
-# A phone reaches this machine at its address on the network, not at 127.0.0.1, so print the addresses
-# worth typing into the app (the settings panel takes a server address) instead of leaving it to guesswork.
+# A phone reaches this machine at its address on the network, not at 127.0.0.1, so work that address out
+# first. Preferring the adapter that has a default gateway keeps virtual switches out of the answer: there
+# are usually several of those and every one of them is an address a phone cannot use.
+$lan = $null
 $addresses = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" })
-if ($addresses) {
-    Write-Host ""
-    Write-Host "A phone on the same network can use:"
-    foreach ($address in $addresses) {
-        Write-Host "  http://$($address.IPAddress):$Port"
+foreach ($address in $addresses) {
+    $config = Get-NetIPConfiguration -InterfaceIndex $address.InterfaceIndex -ErrorAction SilentlyContinue
+    if ($config -and $config.IPv4DefaultGateway) { $lan = $address.IPAddress; break }
+}
+
+if (-not $lan -and $addresses.Count -gt 0) { $lan = $addresses[0].IPAddress }
+
+Write-Host ""
+if ($lan) {
+    Write-Host "A phone on the same network can use: http://${lan}:$Port"
+} else {
+    Write-Host "No network address was found, so a phone will need one typed into it by hand."
+}
+
+# The working copy is what a connected phone actually reads, and our own two files are not the employer's:
+# they are this project's settings and the words for the screens it added, so a server started from an older
+# checkout would serve an older copy of them and the app would be missing strings that exist in the
+# repository. Align them before starting, and leave the employer's files alone.
+#
+# dev.json is the one file where the committed copy belongs to the developer rather than the phone: it
+# points at 127.0.0.1, which is exactly the address a phone cannot reach. It is written with the network
+# address in it instead, so a connected device is never handed a list it has to throw away.
+$content = Join-Path $root "server\content"
+if (Test-Path $content) {
+    $extraSource = Join-Path $root "data\strings-extra.json"
+    $extraWorking = Join-Path $content "strings-extra.json"
+    if (Test-Path $extraSource) {
+        $current = ""
+        if (Test-Path $extraWorking) { $current = Get-Content $extraWorking -Raw }
+        $wanted = Get-Content $extraSource -Raw
+        if ($current -ne $wanted) {
+            Copy-Item $extraSource $extraWorking -Force
+            Write-Host "Copied data\strings-extra.json over the server's working copy, which had drifted from it."
+        }
     }
+
+    $devSource = Join-Path $root "data\dev.json"
+    $devWorking = Join-Path $content "dev.json"
+    if ((Test-Path $devSource) -and $lan) {
+        $settings = Get-Content $devSource -Raw | ConvertFrom-Json
+        $settings.dataServerUrl = "http://${lan}:$Port"
+
+        # -Force, because the committed file may not carry this key at all and PowerShell will not create
+        # it by assignment.
+        $settings | Add-Member -NotePropertyName "dataServerUrls" -NotePropertyValue @("http://${lan}:$Port") -Force
+        $wanted = ($settings | ConvertTo-Json)
+        $current = ""
+        if (Test-Path $devWorking) { $current = Get-Content $devWorking -Raw }
+        if ($current.Trim() -ne $wanted.Trim()) {
+            # Written without a byte-order mark: Set-Content -Encoding UTF8 adds one on PowerShell 5.1, and a
+            # BOM in front of the opening brace is not valid JSON to the app or to the server's own check.
+            [System.IO.File]::WriteAllText($devWorking, $wanted, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "Wrote the network address into the server's dev.json, which points at loopback otherwise."
+        }
+    }
+
+    Write-Host "Press 'Push to clients' in the admin page to send any of the above to an app that is already open."
 }
 
 # Windows Firewall blocks inbound connections by default; this is the usual reason a phone cannot reach
