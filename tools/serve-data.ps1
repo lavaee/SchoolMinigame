@@ -47,9 +47,16 @@ if ($adb) {
         $devices = @()
     }
 
-    if ($devices) {
-        & $adb reverse "tcp:$Port" "tcp:$Port" | Out-Null
-        Write-Host "Forwarded tcp:$Port to the attached device (type http://127.0.0.1:$Port into the app to use it)."
+    $serials = @($devices | ForEach-Object { ($_.Line -split "\s+")[0] } | Where-Object { $_ })
+
+    if ($serials.Count -gt 0) {
+        # Every attached device gets the forward: a headset and a phone can both be plugged in at once, and
+        # without naming one, adb refuses the command outright ("more than one device/emulator").
+        foreach ($serial in $serials) {
+            & $adb -s $serial reverse "tcp:$Port" "tcp:$Port" 2>$null | Out-Null
+        }
+
+        Write-Host "Forwarded tcp:$Port to $($serials.Count) attached device(s) over USB (type http://127.0.0.1:$Port into the app by hand to use it)."
     } else {
         Write-Host "No device is attached, so the port was not forwarded."
     }

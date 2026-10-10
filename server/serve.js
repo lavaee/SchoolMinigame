@@ -1092,17 +1092,33 @@ function createServer(options) {
     return { server, store, paths, buildState, validateContent };
 }
 
+// A phone reaches this machine over the network, and every virtual adapter on a development machine -
+// vEthernet (WSL), Hyper-V, VirtualBox, Docker - also holds an IPv4 address that no phone can reach. The
+// names give them away, so they stay out of the list a person is being asked to read and type.
+const VIRTUAL_INTERFACE = /^(vEthernet|VirtualBox|VMware|Hyper-V|Docker|docker|br-|veth|utun|tun|tap|Tailscale|ZeroTier|Loopback)/i;
+
 function localAddresses() {
     const addresses = [];
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
+        if (VIRTUAL_INTERFACE.test(name)) continue;
         for (const entry of interfaces[name] || []) {
             if (entry.family === 'IPv4' && !entry.internal) {
                 addresses.push(entry.address);
             }
         }
     }
-    return addresses;
+
+    // Household and small-office ranges first: those are what a router hands out, and the ones a phone on
+    // the same wifi is most likely to reach.
+    return addresses.sort((left, right) => addressRank(left) - addressRank(right));
+}
+
+function addressRank(address) {
+    if (address.startsWith('192.168.')) return 0;
+    if (address.startsWith('10.')) return 1;
+    if (address.startsWith('172.')) return 2;
+    return 3;
 }
 
 function startFromCommandLine() {
@@ -1126,8 +1142,10 @@ function startFromCommandLine() {
         console.log(`Content version      : ${app.store.version()}`);
         console.log('');
         console.log('  Admin page      : http://127.0.0.1:' + bound + '/');
-        for (const address of localAddresses()) {
-            console.log('  On the network  : http://' + address + ':' + bound + '/');
+        const networkAddresses = localAddresses();
+        for (let index = 0; index < networkAddresses.length; index++) {
+            const hint = index === 0 && networkAddresses.length > 1 ? '   <- the one a phone should use' : '';
+            console.log('  On the network  : http://' + networkAddresses[index] + ':' + bound + '/' + hint);
         }
         console.log('');
         console.log('  Over USB, with the phone attached, run: adb reverse tcp:' + bound + ' tcp:' + bound);
