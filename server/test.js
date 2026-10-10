@@ -21,7 +21,10 @@ const crypto = require('crypto');
 
 const server = require('./server.js');
 
-const dataDirectory = path.resolve(__dirname, '..', 'data');
+// Where the supplied content is. In the repository that is data/ at the project root; in a packaged copy of
+// the server it is default-data/ beside it. Asking the server rather than deciding here means this suite
+// tests whichever layout it is sitting in, and can travel with the package.
+const dataDirectory = server.pathsFrom({}).supplied;
 const MANAGED_FILES = server.MANAGED_FILES;
 
 let passed = 0;

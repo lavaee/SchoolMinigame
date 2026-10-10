@@ -9,8 +9,10 @@
  *   node server/server.js [port]        (default 8787)
  *
  * Content model
- *   ../data/          the files the employer supplied. Never written to. The pristine source.
- *   content/          the working copy, seeded from ../data/ on first use. Served and edited.
+ *   ../data/          the files the employer supplied, in the repository. Never written to. The pristine source.
+ *   default-data/     the same files inside a packaged copy of this server, when it is run away from the
+ *                     repository. Never written to either; whichever of the two exists is the pristine source.
+ *   content/          the working copy, seeded from the pristine source on first use. Served and edited.
  *   state.json        the content version and when it was last pushed.
  *
  * Routes the Unity client depends on, exactly:
@@ -198,10 +200,23 @@ function formatList(items, limit) {
 // Directories and the working copy
 // ---------------------------------------------------------------------------
 
+/**
+ * Where the content lives.
+ *
+ * A packaged copy of this server - the folder handed to somebody else - carries its own pristine content in
+ * `default-data/` beside this file, so it can be dropped on any machine and run without the game's
+ * repository next to it. Inside the repository that folder does not exist and the supplied files are read
+ * from `data/` at the project root, which is where the brief puts them, where the editor build reads them
+ * from, and where a test pins them byte for byte. One server, two layouts, decided by what is on disk.
+ */
 function pathsFrom(options) {
     const serverDirectory = __dirname;
+    const packagedData = path.resolve(serverDirectory, 'default-data');
+    const repositoryData = path.resolve(serverDirectory, '..', 'data');
+
     return {
-        supplied: options.suppliedDirectory || path.resolve(serverDirectory, '..', 'data'),
+        supplied: options.suppliedDirectory
+            || (fs.existsSync(packagedData) ? packagedData : repositoryData),
         working: options.contentDirectory || path.resolve(serverDirectory, 'content'),
         state: options.statePath || path.resolve(serverDirectory, 'state.json'),
         publicDirectory: options.publicDirectory || path.resolve(serverDirectory, 'public')
@@ -1247,7 +1262,8 @@ function startFromCommandLine() {
         console.log('  Over USB, with the phone attached, run: adb reverse tcp:' + bound + ' tcp:' + bound);
         console.log('  then use http://127.0.0.1:' + bound + ' inside the app.');
         console.log('');
-        console.log('Edit content in the admin page, press Push, and the app reloads on its next poll.');
+        console.log('Edit content in the admin page and press Push: every app that is open is told as the');
+        console.log('button is pressed, and offers the change rather than applying it behind the player.');
     });
 }
 

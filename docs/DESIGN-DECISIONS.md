@@ -135,6 +135,28 @@ exist: a preview drawn by calling into Unity is not possible from a browser, and
 sixth stage needs to see what six stages look like. The mirror is pinned by tests on both sides — the shape
 numbers, the default-mornings fallback and the thirst posture are asserted for the same values.
 
+## Why can the server run without the repository?
+
+Because the folder that gets handed over is not the folder it is developed in, and a server that reads `data/`
+one level above itself only works while it is sitting inside the checkout. The first time that folder left
+this machine it would find no `data/` there and serve nothing at all.
+
+So a packaged copy carries its own pristine files in `server/default-data/`, seeded into `content/` the same
+way, and `server.js` prefers that folder whenever it exists. Inside the repository it does not exist and
+`data/` is still the source — which matters, because that is where the brief puts the files, where the editor
+build reads them from, and where the byte-for-byte test points. One server file, two layouts, decided by what
+is on disk rather than by a flag somebody has to remember to pass.
+
+The copy is the one place in this project where the supplied files exist twice, so it is checked rather than
+trusted: `tools/package-server.ps1` compares every packaged file against `data/` and fails on any difference.
+It then moves the whole package to a temporary directory with nothing above it, starts it on a spare port and
+asks it where its content came from. A package answering with a path inside the repository would be a package
+that breaks on the machine it was built for, so that is an error and not a warning.
+
+`test.js` resolves its content through the same function the server uses, so the suite travels with the
+package and passes there. Whoever receives it can run `node test.js` and watch the protocol's 228 checks go
+by on their own machine, with neither Unity nor this repository anywhere near it.
+
 ## Why does the app try more than one address?
 
 Because one server can be reached at more than one address and the phone cannot know which one is live: the
@@ -298,7 +320,8 @@ can produce, so this would be polish rather than a fix).
 | `Assets/Scenes/Main.unity` | the authored world and interface |
 | `Assets/Resources/SmallPotSprites` | 21 replaceable PNGs, one per interface icon |
 | `Assets/Materials/Generated`, `Assets/Meshes/Generated` | baked materials and meshes |
-| `Assets/Tests/EditMode` | 72 tests over the rules above |
+| `Assets/Tests/EditMode` | 84 tests over the rules above |
 | `data/` | the supplied files, plus our two optional ones |
-| `tools/` | verify, sync, build, serve |
-| `server/` | the zero-dependency content server, its admin page and 215 checks |
+| `tools/` | verify, sync, build, serve, package |
+| `server/` | the zero-dependency content server, its admin page and 228 checks |
+| `server/package/` | the launcher and the notes copied into a handed-over server |

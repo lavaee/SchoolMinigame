@@ -35,8 +35,30 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\serve-data.ps1
 That prints every address a phone can use, starts the server, and forwards the port over USB when a
 device is attached. Open <http://127.0.0.1:8787/> for the editor. If a phone on the same Wi-Fi still
 cannot connect, the firewall is almost always the reason: the script adds the rule when it is run as an
-administrator, and prints the one line to run by hand when it is not. `node server\test.js` runs 215
+administrator, and prints the one line to run by hand when it is not. `node server\test.js` runs 228
 checks over the server in-process.
+
+**Handing the server to somebody else.**
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\package-server.ps1
+```
+
+That writes `Builds\SmallPot-Server\` and a zip of it: the server, the editor page, `default-data/` with its
+own copy of the supplied content, a working copy seeded from it, the launcher, the test suite and — by
+default — Node.js and the current APK, so the other machine needs nothing installed. `-IncludeNode $false
+-IncludeApk $false` leaves those two out for a copy you are only making for yourself.
+
+The copy is checked rather than assumed. The packaged content is compared byte for byte against `data/`, and
+then the whole folder is moved to a temporary directory with no repository above it, started on a spare port
+and asked where it read its content from. If the answer is not its own `default-data/`, the script fails —
+that would mean it still depended on this checkout. `server.js` prefers `default-data/` whenever that folder
+exists and falls back to `data/` when it does not, so one server file serves both layouts, and `test.js`
+resolves its content the same way, which is why the suite can travel with the package.
+
+On the other machine: unzip it anywhere, double-click `start-server.cmd`, and type the address it prints into
+the app once — the app remembers it. If a device is attached, `adb install -r SmallPot.apk` puts the game on
+it. That is the whole setup.
 
 **The app will not start without a server.**
 
@@ -56,7 +78,7 @@ the bundled data becomes the floor again, with the status chip reporting where t
   -projectPath . -testPlatform EditMode -testResults Logs\tests-editmode.xml
 ```
 
-72 EditMode tests cover the JSON reader, the string fallback chain, Persian number formatting, the whole
+84 EditMode tests cover the JSON reader, the string fallback chain, Persian number formatting, the whole
 morning transition matrix, the pair game's round building, and the byte identity of the supplied data
 files. They also fail the build if any Persian text is hard-coded in a script.
 
