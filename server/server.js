@@ -6,7 +6,7 @@
  * top of the plain static host it started as is a *working copy*: a designer edits content in a web
  * page, and only a deliberate push makes the running app pick it up.
  *
- *   node server/serve.js [port]        (default 8787)
+ *   node server/server.js [port]        (default 8787)
  *
  * Content model
  *   ../data/          the files the employer supplied. Never written to. The pristine source.
@@ -1127,7 +1127,7 @@ function startFromCommandLine() {
 
     app.server.on('error', error => {
         if (error.code === 'EADDRINUSE') {
-            console.error(`Port ${port} is already in use. Pass another one: node server/serve.js 8788`);
+            console.error(`Port ${port} is already in use. Pass another one: node server/server.js 8788`);
         } else {
             console.error(error.message);
         }

@@ -35,6 +35,15 @@ namespace SmallPot
         private Image _statusChip;
         private RTLTextMeshPro _statusChipText;
 
+        /// <summary>
+        /// What the chip was asked to say, before RTLTMPro shaped it.
+        ///
+        /// The label's own text cannot be used as the "previous" value: it has already been through the
+        /// shaper, and assigning it back shapes it a second time, which turns a Persian sentence into
+        /// isolated presentation forms.
+        /// </summary>
+        private string _chipText = string.Empty;
+
         private RectTransform _reportCard;
         private CanvasGroup _reportGroup;
         private RTLTextMeshPro _reportTitle;
@@ -286,6 +295,7 @@ namespace SmallPot
             }
 
             bool show = !string.IsNullOrEmpty(text);
+            _chipText = show ? text : string.Empty;
             _statusChip.gameObject.SetActive(show);
             if (show)
             {
@@ -316,7 +326,9 @@ namespace SmallPot
 
         private IEnumerator FlashRoutine(string text, float seconds)
         {
-            string restored = _statusChip.gameObject.activeSelf ? _statusChipText.text : string.Empty;
+            // The chip's own source string, never the label's rendered text: handing RTLTMPro a string it
+            // has already shaped is what produced glyph soup when the flash handed the chip back.
+            string restored = _chipText;
 
             SetStatusChip(text);
             yield return Tween.WaitUnscaled(Mathf.Max(0.5f, seconds));
@@ -326,8 +338,7 @@ namespace SmallPot
                 yield break;
             }
 
-            _statusChipText.text = restored;
-            _statusChip.gameObject.SetActive(!string.IsNullOrEmpty(restored));
+            SetStatusChip(restored);
             _chipFlash = null;
         }
 

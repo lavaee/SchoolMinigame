@@ -19,7 +19,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 
-const server = require('./serve.js');
+const server = require('./server.js');
 
 const dataDirectory = path.resolve(__dirname, '..', 'data');
 const MANAGED_FILES = server.MANAGED_FILES;

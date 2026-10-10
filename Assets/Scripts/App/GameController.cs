@@ -56,6 +56,16 @@ namespace SmallPot
         private bool _retrying;
         private bool _hasServer;
         private ConnectionGateView _gate;
+        private UpdatePromptView _update;
+
+        /// <summary>
+        /// The revision the server has reported and the player has not accepted yet, or -1 for none.
+        ///
+        /// It survives a rebuild of the interface, because a rebuild is not an answer: the content has still
+        /// not been taken, and a card that disappeared because something else refreshed the scene would drop
+        /// the update on the floor.
+        /// </summary>
+        private int _pendingVersion = -1;
 
         /// <summary>
         /// Set by the screenshot harness, which plays offline on purpose: without it the gate would refuse
@@ -166,13 +176,50 @@ namespace SmallPot
                 }
 
                 _contentVersion = version;
-                Log.Info($"Content revision {version} was pushed; reloading.");
-                yield return ReloadRoutine();
+                Log.Info($"Content revision {version} was pushed; offering it instead of applying it.");
+                OfferUpdate(version);
+            }
+        }
 
-                if (Strings.Has("content.updated"))
-                {
-                    _hud.FlashStatusChip(Strings.Get("content.updated"), 3.5f);
-                }
+        /// <summary>
+        /// Puts the update card up and leaves the decision with the player.
+        ///
+        /// Applying the content here instead is what made a push feel like a glitch: a round could vanish
+        /// mid-answer, and the only sign was a chip that flashed for three seconds.
+        /// </summary>
+        private void OfferUpdate(int version)
+        {
+            _pendingVersion = version;
+            _update?.Show(version);
+
+            // Paused before the card is read, not after: the round clock is shared, and it must not run
+            // while somebody is deciding.
+            RefreshPaused();
+
+            if (Strings.Has("content.pending"))
+            {
+                _hud.SetStatusChip(Strings.Get("content.pending"));
+            }
+        }
+
+        /// <summary>Takes the update the player accepted.</summary>
+        private void ApplyUpdate()
+        {
+            _pendingVersion = -1;
+            _update?.Hide();
+            RefreshPaused();
+            StartCoroutine(ApplyUpdateRoutine());
+        }
+
+        private IEnumerator ApplyUpdateRoutine()
+        {
+            yield return ReloadRoutine();
+
+            // The note comes after the reload, which rebuilds the interface: shown before it, the rebuild
+            // would wipe it a frame later.
+            if (Strings.Has("content.updated"))
+            {
+                _hud.FlashStatusChip(Strings.Get("content.updated"), 3.5f);
             }
         }
 
@@ -308,12 +355,12 @@ namespace SmallPot
         private void ConnectionLost()
         {
             _connected = false;
-            SetPaused(true);
 
             _gate?.SetHeadline("gate.lost_title", "gate.lost_body");
             _gate?.Show(TriedAddresses());
             _gate?.SetStatus(Strings.Has("gate.lost_status") ? Strings.Get("gate.lost_status") : string.Empty);
             AudioDirector.Play(Sound.Wrong);
+            RefreshPaused();
 
             StartCoroutine(GateWatch());
         }
@@ -325,6 +372,15 @@ namespace SmallPot
         /// pause a tap arriving while the gate is up cannot cheat.
         /// </summary>
         private void SetPaused(bool paused) => Time.timeScale = paused ? 0f : 1f;
+
+        /// <summary>
+        /// Stops time while something is standing in front of the player, and starts it again when nothing is.
+        ///
+        /// Both the gate and the update card ask for a decision, and asking the two panels rather than
+        /// counting pauses keeps one of them from cancelling the other out.
+        /// </summary>
+        private void RefreshPaused() =>
+            SetPaused((_gate != null && _gate.Visible) || (_update != null && _update.Visible));
 
         /// <summary>The gate's retry: remembers a corrected address and tries again.</summary>
         private void RequestRetry(string address)
@@ -359,8 +415,8 @@ namespace SmallPot
 
             if (_connected)
             {
-                SetPaused(false);
                 _gate?.Hide();
+                RefreshPaused();
                 if (Strings.Has("gate.connected"))
                 {
                     _hud.FlashStatusChip(Strings.Get("gate.connected"), 3.5f);
@@ -454,6 +510,15 @@ namespace SmallPot
             _gate = new ConnectionGateView(Strings, RequestRetry);
             _gate.Build(canvas.transform);
 
+            _update = new UpdatePromptView(Strings, ApplyUpdate);
+            _update.Build(canvas.transform);
+
+            // A rebuild is not an answer: if content is still waiting to be taken, it is offered again.
+            if (_pendingVersion >= 0)
+            {
+                OfferUpdate(_pendingVersion);
+            }
+
             _deferredRebuild = false;
 
             // The status chip is deliberately quiet: it only appears when the data did not come from the
@@ -514,7 +579,22 @@ namespace SmallPot
                 return string.Empty;
             }
 
-            return Strings.Get(key) + " " + Strings.DisplayNumber(remote > 0 ? remote : cache);
+            string sourceLabel = Strings.Get(key);
+            int count = remote > 0 ? remote : cache;
+
+            // The words and the number together, rather than a bare count: a number alone in the corner is a
+            // riddle, and the count is worth explaining because it is how many of the six data files came
+            // from there.
+            if (Strings.Has("settings.data_source_count"))
+            {
+                return Strings.Format("settings.data_source_count", new Dictionary<string, string>(2, StringComparer.Ordinal)
+                {
+                    { "source", sourceLabel },
+                    { "n", Strings.DisplayNumber(count) }
+                });
+            }
+
+            return sourceLabel + " " + Strings.DisplayNumber(count);
         }
 
         // ---- Core actions ----------------------------------------------------------------------

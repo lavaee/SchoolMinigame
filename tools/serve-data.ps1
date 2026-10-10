@@ -148,4 +148,9 @@ if (-not $rule) {
 
 Write-Host "Starting the data server; press Ctrl+C to stop."
 Write-Host ""
-& $node (Join-Path $root "server\serve.js") $Port
+# The entry point was called serve.js until it was renamed, so it is looked up rather than assumed: the
+# alternative is a server that refuses to start with a module-not-found error after a tidy-up.
+$entry = Join-Path $root "server\server.js"
+if (-not (Test-Path $entry)) { $entry = Join-Path $root "server\serve.js" }
+
+& $node $entry $Port

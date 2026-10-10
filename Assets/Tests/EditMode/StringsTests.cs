@@ -64,7 +64,13 @@ namespace SmallPot.Tests
             "gate.lost_title",
             "gate.lost_body",
             "gate.lost_status",
-            "settings.server_url_hint"
+            "settings.server_url_hint",
+            "settings.data_source_count",
+            "content.pending",
+            "update.title",
+            "update.body",
+            "update.detail",
+            "update.apply"
         };
 
         [Test]
@@ -104,6 +110,38 @@ namespace SmallPot.Tests
                 Assert.IsTrue(strings.Has(key), $"'{key}' is missing from strings-extra.json.");
                 Assert.IsNotEmpty(strings[key].AsString(string.Empty), $"'{key}' is empty in strings-extra.json.");
             }
+        }
+
+        [Test]
+        public void TheCountOnTheStatusChipExplainsItselfInPersianDigits()
+        {
+            StringsStore strings = RepoData.Strings();
+            Assert.IsTrue(strings.Has("settings.data_source_count"), "the chip's count line is missing.");
+
+            string line = strings.Format(
+                "settings.data_source_count",
+                new Dictionary<string, string>(2, System.StringComparer.Ordinal)
+                {
+                    { "source", strings.Get("settings.data_source.remote") },
+                    { "n", strings.DisplayNumber(6) }
+                });
+
+            // Both halves matter: the words say what the number is counting, and the number is written in the
+            // digits the rest of the game uses. A bare latin "6" in the corner is what the chip used to show.
+            StringAssert.Contains(strings.Get("settings.data_source.remote"), line);
+            StringAssert.Contains("۶", line);
+            StringAssert.DoesNotContain("6", line);
+        }
+
+        [Test]
+        public void TheUpdateCardNamesItsRevisionInPersianDigits()
+        {
+            StringsStore strings = RepoData.Strings();
+            Assert.IsTrue(strings.Has("update.detail"), "the update card's revision line is missing.");
+
+            string line = strings.FormatNumber("update.detail", 43);
+            StringAssert.Contains("۴۳", line);
+            StringAssert.DoesNotContain("43", line);
         }
 
         [Test]

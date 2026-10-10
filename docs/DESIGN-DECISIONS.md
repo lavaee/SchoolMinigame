@@ -198,6 +198,36 @@ costing the player the session. The pause is done through time rather than by te
 is why the minigame's clock reads scaled time — with the clock at its normal speed that is the same number
 it always was.
 
+## Why does a push wait for a button?
+
+Because a push is somebody else's action, and it used to be applied to whatever the player was in the middle
+of. The version watch noticed a new revision, reloaded the content, rebuilt the interface and flashed a chip
+for three seconds: a round could vanish mid-answer, and the only record of why was one word in the corner.
+That is tolerable when the person pushing and the person playing are the same person, which is the one case a
+demo is not.
+
+The watch offers now instead of applying. A card names the revision that is waiting and says the game has
+stopped where it is; the round clock stops with the card — the same pause a dropped connection uses, for the
+same reason, that nothing shared may run while somebody is reading — and one button applies it. The update is
+still not a secret while the card is up: the status chip says one is waiting, so the corner answers the
+question before the card does. If the interface is rebuilt for any other reason while a revision is pending,
+the card comes back: a rebuild is not an answer, and content that quietly stopped being offered would be
+content the player never got.
+
+The card is built the way every other panel is, find-first/create-second, which is why it works on a device
+today with no re-bake and will be editable in the scene after the next one.
+
+## Why does the status chip remember what it was asked to say?
+
+RTLTMPro shapes a string as it is assigned, and shaping is not idempotent: hand it text it has already
+shaped and the letters come back as isolated presentation forms. The chip's flash used to save the label's
+own text, replace it for a few seconds, and put it back — so every flash ended in glyph soup, which is what
+`ﺏﺯ ﺵﺱﻰﺭ ۶` was, and what the player saw instead of "از سرور ۶".
+
+It keeps the string it was given now and restores that. The rule generalises past this one label: never read
+a rendered string back out of an RTL label and assign it somewhere again, because the second shaping is not
+the same string as the first.
+
 ## Why can the app refuse to start?
 
 Because silence is the worst possible answer to a failed connection. The first version of this app treated
