@@ -5,9 +5,10 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\build-apk.ps1 -NoDataServer
 #
 # The addresses the phone should try are baked into the StreamingAssets copy of data/dev.json. Left
-# alone, the default is this machine's address on the local network plus 127.0.0.1, the second one
-# covering "adb reverse tcp:8787 tcp:8787" over USB. The app keeps whichever address answers first, so
-# one APK works over Wi-Fi and over a cable. The committed data/dev.json is never rewritten by a build.
+# alone, the default is this machine's address on the local network. 127.0.0.1 is never baked: the phone
+# is a different machine and cannot reach it. A USB cable still works - forward the port with
+# "adb reverse tcp:8787 tcp:8787" and type 127.0.0.1 into the app by hand, where a typed address is
+# obeyed. The committed data/dev.json is never rewritten by a build.
 
 [CmdletBinding()]
 param(
@@ -66,8 +67,11 @@ if ($NoDataServer) {
         $candidates += "http://${lan}:$DataServerPort"
     }
 
-    # Over USB, "adb reverse tcp:<port> tcp:<port>" makes this address work on the phone too.
-    $candidates += "http://127.0.0.1:$DataServerPort"
+    # 127.0.0.1 is deliberately not added. The phone is a different machine, so loopback is an address it
+    # can never reach; shipping it only fills the settings panel and the failure list with something that
+    # was never going to work. The app also ignores loopback addresses on a device, so a stale one in a
+    # cached or served file cannot bring it back. A USB cable still works: forward the port with
+    # "adb reverse tcp:<port> tcp:<port>" and type 127.0.0.1 into the app by hand.
     $candidates = @($candidates | Select-Object -Unique)
     Write-Host "The app will try: $($candidates -join ', ')"
 }

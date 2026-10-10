@@ -124,6 +124,11 @@ namespace SmallPot
         /// </summary>
         public IEnumerator Load(string serverUrlOverride, bool allowRemote, Action<DataBundle> done)
         {
+            // The cache belongs to the installed build, not to the app forever. A new build ships new
+            // files, and a cached copy of a file the build has since gained keys in would hide them - which
+            // is exactly the sort of thing that looks like "the app is in English and I cannot fix it".
+            EnsureCacheMatchesAppVersion();
+
             // Phase 1: learn the base URL from dev.json on disk only. The remote layer cannot be used
             // to discover where the remote layer is.
             var localDev = new Dictionary<string, LoadedFile>(StringComparer.OrdinalIgnoreCase);
@@ -248,6 +253,18 @@ namespace SmallPot
                 Add(dev.DataServerUrl);
             }
 
+            // A phone cannot reach the machine's own loopback address, so on a device an address pointing
+            // there is dropped rather than offered, listed or suggested. The exception is an address the
+            // player typed in themselves: that is an instruction, and typing 127.0.0.1 is how a USB cable
+            // with "adb reverse" is used. Doing this here rather than only in the build means a stale
+            // address in a cached or served file cannot bring loopback back either.
+            if (Application.isMobilePlatform)
+            {
+                string typed = Normalise(overrideUrl);
+                urls.RemoveAll(url =>
+                    IsLoopbackAddress(url) && !string.Equals(url, typed, StringComparison.OrdinalIgnoreCase));
+            }
+
             return urls;
 
             void Add(string url)
@@ -269,6 +286,28 @@ namespace SmallPot
                 urls.Add(trimmed);
             }
         }
+
+        /// <summary>True when the address points back at the machine running the app.</summary>
+        public static bool IsLoopbackAddress(string url)
+        {
+            string text = Normalise(url).ToLowerInvariant();
+            int scheme = text.IndexOf("://", StringComparison.Ordinal);
+            string authority = scheme >= 0 ? text.Substring(scheme + 3) : text;
+
+            int end = authority.IndexOfAny(new[] { '/', '?' });
+            if (end >= 0)
+            {
+                authority = authority.Substring(0, end);
+            }
+
+            int port = authority.LastIndexOf(':');
+            string host = port >= 0 ? authority.Substring(0, port) : authority;
+
+            return host == "localhost" || host == "::1" || host == "[::1]" ||
+                   host == "127.0.0.1" || host.StartsWith("127.", StringComparison.Ordinal);
+        }
+
+        private static string Normalise(string url) => (url ?? string.Empty).Trim().TrimEnd('/');
 
         /// <summary>
         /// Tries each address once and reports the first that answers the version endpoint. Every failure
@@ -486,7 +525,24 @@ namespace SmallPot
             }
         }
 
-        /// <summary>Removes the cached copies, so the next load falls back to the bundled revision.</summary>
+        /// <summary>Names the build that wrote the cached copies.</summary>
+        private const string CacheStampFileName = "cache.build";
+
+        /// <summary>
+        /// Identifies the build the cache belongs to.
+        ///
+        /// The version number alone is not enough: the build that changes what ships is often the same
+        /// version with a different build, so the build's own identifier is what is compared.
+        /// </summary>
+        private static string CurrentBuildStamp =>
+            (Application.version ?? string.Empty).Trim() + "+" + (Application.buildGUID ?? string.Empty).Trim();
+
+        /// <summary>
+        /// Removes the cached copies, so the next load falls back to the bundled revision.
+        ///
+        /// The stamp is written straight back: "forget the data" must not also mean "forget which build
+        /// wrote it", or the next load would clear again and take a freshly planted cache with it.
+        /// </summary>
         public static void ClearCache()
         {
             try
@@ -500,6 +556,28 @@ namespace SmallPot
             {
                 Log.Warn($"Could not clear the data cache: {exception.Message}");
             }
+
+            WriteCache(CacheStampFileName, CurrentBuildStamp);
+        }
+
+        /// <summary>Drops the cache when it was written by a different build of the app.</summary>
+        private static void EnsureCacheMatchesAppVersion()
+        {
+            string stamp = Path.Combine(CacheDirectory, CacheStampFileName);
+            try
+            {
+                if (File.Exists(stamp) && File.ReadAllText(stamp, Encoding.UTF8).Trim() == CurrentBuildStamp)
+                {
+                    return;
+                }
+            }
+            catch (Exception exception)
+            {
+                Log.Warn($"Could not read the cache stamp: {exception.Message}");
+            }
+
+            Log.Info("This build has not written the cached data; starting from the files inside the app.");
+            ClearCache();
         }
 
         private static DataBundle Build(Dictionary<string, LoadedFile> files)

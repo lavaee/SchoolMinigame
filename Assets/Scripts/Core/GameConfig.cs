@@ -430,6 +430,14 @@ namespace SmallPot
         /// </summary>
         public bool RequireServer;
 
+        /// <summary>
+        /// How often a build that insists on a server checks that it is still there, in seconds.
+        ///
+        /// The check is one small request, and a connection that drops while the game is being played has
+        /// to be noticed then rather than at the next launch, so it is deliberately short.
+        /// </summary>
+        public float ConnectionCheckSeconds = 3f;
+
         public static DevSettings FromJson(JsonValue root)
         {
             var settings = new DevSettings();
@@ -467,6 +475,16 @@ namespace SmallPot
             if (root.Has("requireServer"))
             {
                 settings.RequireServer = GameConfig.ReadBool(root, "requireServer", settings.RequireServer, new List<string>());
+            }
+
+            if (root.Has("connectionCheckSeconds"))
+            {
+                float seconds = GameConfig.ReadFloat(
+                    root, "connectionCheckSeconds", settings.ConnectionCheckSeconds, new List<string>());
+                if (seconds >= 1f)
+                {
+                    settings.ConnectionCheckSeconds = seconds;
+                }
             }
 
             return settings;

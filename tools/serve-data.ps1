@@ -27,7 +27,9 @@ if (-not $node) {
     throw "Node.js was not found; install it or edit this script to point at node.exe."
 }
 
-# adb reverse makes http://127.0.0.1:<port> work on the phone over USB, whatever the Wi-Fi is doing.
+# adb reverse makes http://127.0.0.1:<port> reach this machine from the phone over USB. The app does not
+# try loopback on a device - a phone is a different machine - so the address has to be typed into the app
+# by hand; a typed address is obeyed.
 $adb = Get-ChildItem "F:\Unity\Editors\2022.3.62f3\Editor\Data\PlaybackEngines\AndroidPlayer\SDK\platform-tools\adb.exe" `
     -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
 
@@ -35,9 +37,28 @@ if ($adb) {
     $devices = & $adb devices 2>&1 | Select-String -Pattern "\tdevice$"
     if ($devices) {
         & $adb reverse "tcp:$Port" "tcp:$Port" | Out-Null
-        Write-Host "Forwarded tcp:$Port to the attached device. Use http://127.0.0.1:$Port in the app."
+        Write-Host "Forwarded tcp:$Port to the attached device (type http://127.0.0.1:$Port into the app to use it)."
     } else {
         Write-Host "No device is attached, so the port was not forwarded."
+    }
+}
+
+# The working copy is what a connected phone actually reads, and our own two files are not the employer's:
+# they are this project's settings and the words for the screens it added, so a server started from an
+# older checkout would serve an older copy of them and the app would be missing strings that exist in the
+# repository. Align them before starting, and leave the employer's files alone.
+foreach ($name in @("dev.json", "strings-extra.json")) {
+    $supplied = Join-Path $root "data\$name"
+    $working = Join-Path $root "server\content\$name"
+    if ((Test-Path $supplied) -and (Test-Path (Split-Path -Parent $working))) {
+        $current = ""
+        if (Test-Path $working) { $current = Get-Content $working -Raw }
+        $wanted = Get-Content $supplied -Raw
+        if ($current -ne $wanted) {
+            Copy-Item $supplied $working -Force
+            Write-Host "Copied data\$name over the server's working copy, which had drifted from it."
+            Write-Host "  Press 'Push to clients' in the admin page to send it to an app that is already open."
+        }
     }
 }
 

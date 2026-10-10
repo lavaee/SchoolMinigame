@@ -138,23 +138,24 @@ numbers, the default-mornings fallback and the thirst posture are asserted for t
 
 ## Why does the app try more than one address?
 
-Because one server has two addresses and the phone cannot know which one is live. Over Wi-Fi it is the
-machine's address on the network; over a USB cable it is `127.0.0.1`, made to work on the phone by
-`adb reverse tcp:8787 tcp:8787`. Baking only one of them guarantees that half the ways of connecting
-fail, and the first build of this project baked localhost — which is exactly that mistake. It worked over
-the cable and quietly fell back to bundled data over Wi-Fi, with nothing on screen to explain why.
+Because one server can be reached at more than one address and the phone cannot know which one is live: the
+machine's address on the network over Wi-Fi, and - if you forward the port over a cable - `127.0.0.1`. The
+app tries every address it has in turn and keeps the first that answers.
 
-So the build bakes both, the app asks each for its revision in turn, and the first that answers becomes
-the address used from then on. Nothing else is given up for it: the bundled copy is still the floor, an
-address that is not answering yet is retried on the next poll rather than written off at launch, and the
-settings panel still takes an address by hand. The order is decided by a pure function with its own
-tests, because the order is the whole feature.
+The one address it never offers on a device is loopback. A phone is a different machine, so `127.0.0.1`
+there means the phone itself: an address that cannot possibly work, sitting at the top of the failure list
+and in the settings panel looking like a setting somebody chose. So the build no longer bakes it, the
+loader drops it on a device even when a cached or served file still contains it, and the gate never
+suggests it. A typed address is obeyed, so the USB route still works: forward the port with
+`adb reverse tcp:8787 tcp:8787` and enter `127.0.0.1` by hand. That is an instruction to follow; a baked
+loopback is only a guess that happens to be wrong.
+
+The order is decided by a pure function with its own tests, because the order is the whole feature.
 
 The firewall is the other half of the same problem, and it cannot be solved from inside the app: Windows
 blocks inbound connections by default, so a phone on Wi-Fi is refused even when the address is right.
 `tools\serve-data.ps1` reports that state and prints the one-line rule that fixes it, adding the rule
-itself when it happens to be running as an administrator. The USB route needs no rule at all, which is
-why it stays the recommended one for a live demo.
+itself when it happens to be running as an administrator.
 
 ## Why is the app's own configuration never read from the cache?
 
@@ -173,6 +174,29 @@ So the app's own configuration skips the cache. It is either the copy inside the
 server is serving right now, so a device cannot keep running on an address the build has moved on from, and
 installing a new APK is enough to change where it looks. The employer's files keep the old order, because
 for content a cached copy is a feature — it is what lets the game run with no server at all.
+
+Skipping the cache for that one file was not enough on its own, though, because *any* cached file can be
+older than the build that is running. A phone that installed a new APK kept the copies the previous one had
+saved, so a file the build had since gained keys in was still missing them — which is how the connection
+gate came to show `[gate.title]` on a phone while the editor, reading `data/`, showed the sentence. So the
+cache is now stamped with the build that wrote it, and a different build drops it and starts from its own
+files. The stamp is written back the moment the cache is cleared, or the next load would clear it again and
+take a deliberately planted one with it.
+
+## What happens when the server goes away mid-game?
+
+The game stops and says so. A build that insists on a server asks whether it is still there every few
+seconds — `connectionCheckSeconds` in `dev.json`, three by default — and when the answer stops coming it
+pauses and raises the same gate the launch path uses, with a different sentence: this connection dropped,
+rather than it was never there.
+
+That is the opposite of the earlier behaviour, deliberately. A dropped connection used to be invisible:
+the app kept the last answer it had, carried on playing, and only noticed at the next launch, which made a
+dead server look like a working one. Pausing is also the kinder failure. The round set keeps its remaining
+time and the drops it had earned, and the retry loop resumes from exactly where it stopped instead of
+costing the player the session. The pause is done through time rather than by tearing anything down, which
+is why the minigame's clock reads scaled time — with the clock at its normal speed that is the same number
+it always was.
 
 ## Why can the app refuse to start?
 

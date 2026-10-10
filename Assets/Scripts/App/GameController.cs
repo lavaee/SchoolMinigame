@@ -61,6 +61,12 @@ namespace SmallPot
         /// Set by the screenshot harness, which plays offline on purpose: without it the gate would refuse
         /// to start and every capture would be a picture of the gate. The game itself never sets it.
         /// </summary>
+        /// <summary>Set while the connection is being watched, so only one watch is ever running.</summary>
+        private bool _connectionWatching;
+
+        /// <summary>Set while the gate's own retry loop is running, so it is never doubled up.</summary>
+        private bool _gateWatching;
+
         public static bool SuppressServerGate;
 
         private float _nextVersionCheck;
@@ -208,6 +214,7 @@ namespace SmallPot
 
             _watching = true;
             StartCoroutine(VersionWatch());
+            StartCoroutine(ConnectionWatch());
         }
 
         /// <summary>True when this bundle insists on a server before the game may start.</summary>
@@ -227,6 +234,7 @@ namespace SmallPot
             Log.Warn("This build requires a data server and none answered; waiting rather than starting.");
 
             List<string> tried = TriedAddresses();
+            _gate?.SetHeadline("gate.title", "gate.body");
             _gate?.Show(tried);
             _gate?.SuggestAddress(tried.Count > 0 ? tried[0] : string.Empty);
             _gate?.SetStatus(Strings.Has("gate.checking") ? Strings.Get("gate.checking") : string.Empty);
@@ -236,20 +244,96 @@ namespace SmallPot
 
         private IEnumerator GateWatch()
         {
+            if (_gateWatching)
+            {
+                yield break;
+            }
+
+            _gateWatching = true;
             while (_gate != null && _gate.Visible)
             {
                 yield return new WaitForSecondsRealtime(GateRetrySeconds);
                 yield return RetryConnection();
             }
+
+            _gateWatching = false;
         }
+
+        /// <summary>
+        /// Watches the server while the game is being played.
+        ///
+        /// A dropped connection used to be invisible: the app kept the last answer it had and only noticed
+        /// when it was started again. This asks, and when the answer stops coming the game is paused and
+        /// the gate says why, so nobody plays on against a server that has gone.
+        /// </summary>
+        private IEnumerator ConnectionWatch()
+        {
+            if (_connectionWatching || !RequiresServer || SuppressServerGate)
+            {
+                yield break;
+            }
+
+            _connectionWatching = true;
+
+            while (true)
+            {
+                yield return new WaitForSecondsRealtime(ConnectionCheckSeconds);
+
+                // While the gate is up its own loop is already asking, and it owns getting us back.
+                if (_gate != null && _gate.Visible)
+                {
+                    continue;
+                }
+
+                int version = -1;
+                yield return _loader.CheckVersion(_save.ServerUrlOverride, reported => version = reported);
+
+                if (version >= 0)
+                {
+                    continue;
+                }
+
+                Log.Warn("The data server stopped answering; pausing until it is back.");
+                ConnectionLost();
+            }
+        }
+
+        /// <summary>How often the connection is checked, from data/dev.json.</summary>
+        private float ConnectionCheckSeconds =>
+            _bundle != null && _bundle.Dev != null && _bundle.Dev.ConnectionCheckSeconds >= 1f
+                ? _bundle.Dev.ConnectionCheckSeconds
+                : 3f;
+
+        /// <summary>Puts the gate up mid-game, because a server that was answering has stopped.</summary>
+        private void ConnectionLost()
+        {
+            _connected = false;
+            SetPaused(true);
+
+            _gate?.SetHeadline("gate.lost_title", "gate.lost_body");
+            _gate?.Show(TriedAddresses());
+            _gate?.SetStatus(Strings.Has("gate.lost_status") ? Strings.Get("gate.lost_status") : string.Empty);
+            AudioDirector.Play(Sound.Wrong);
+
+            StartCoroutine(GateWatch());
+        }
+
+        /// <summary>
+        /// Stops or resumes everything the game is doing.
+        ///
+        /// Time is what the round timer, the count-ups and the animations read, so scaling it is the one
+        /// pause a tap arriving while the gate is up cannot cheat.
+        /// </summary>
+        private void SetPaused(bool paused) => Time.timeScale = paused ? 0f : 1f;
 
         /// <summary>The gate's retry: remembers a corrected address and tries again.</summary>
         private void RequestRetry(string address)
         {
-            if (!string.IsNullOrEmpty(address) &&
-                !string.Equals(address, _save.ServerUrlOverride, StringComparison.Ordinal))
+            // An emptied field is a deliberate "forget the address I typed". Without that, an address saved
+            // once - a loopback address typed for a USB cable, say - could never be undone from the device.
+            if (!string.Equals(address ?? string.Empty, _save.ServerUrlOverride ?? string.Empty, StringComparison.Ordinal))
             {
-                _save.ServerUrlOverride = address;
+                _save.ServerUrlOverride = address ?? string.Empty;
                 if (!SaveStore.Save(_save, out string error))
                 {
                     Log.Warn($"The corrected address could not be saved ({error}); it will still be used now.");
@@ -275,6 +359,7 @@ namespace SmallPot
 
             if (_connected)
             {
+                SetPaused(false);
                 _gate?.Hide();
                 if (Strings.Has("gate.connected"))
                 {
@@ -715,7 +800,9 @@ namespace SmallPot
                 return;
             }
 
-            _session.TimeLeft -= Time.unscaledDeltaTime;
+            // Scaled time, so the round set stops when the game is paused for a lost connection. With the
+            // clock at its normal speed this is the same number it always was.
+            _session.TimeLeft -= Time.deltaTime;
             _minigame.SetTimeLeft(_session.TimeLeft, Config.MiniGame.TotalSeconds);
 
             if (_session.TimeLeft <= 0f)

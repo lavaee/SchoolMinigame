@@ -161,6 +161,13 @@ Saving a file does not push it, and a file that is invalid JSON, or that breaks 
 with no matching `mornings` entry, is refused and left untouched. Reset restores any file to the
 supplied version byte for byte.
 
+A running client also notices when the server stops answering: a build that insists on one asks every few
+seconds, and a connection that drops while you are playing pauses the game and puts a prompt up saying what
+happened, resuming from where it stopped when the server is back. `127.0.0.1` is never offered on a phone —
+a device cannot reach it, so the build does not bake it and the app ignores it wherever else it turns up;
+type it by hand to use a USB cable. And a cached copy never outlives the build that wrote it, so installing
+a new APK starts from the files inside it.
+
 ## Art and audio
 
 The stand-in art — window, pot, plant, icons and every button — is generated in code in a deliberately

@@ -3,5 +3,6 @@
   "dataServerUrl": "http://127.0.0.1:8787",
   "showDataSourceInfo": true,
   "showDebugPanel": true,
-  "requireServer": true
+  "requireServer": true,
+  "connectionCheckSeconds": 3
 }

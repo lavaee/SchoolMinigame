@@ -38,7 +38,10 @@ namespace SmallPot.EditorTools
             PlayerSettings.bundleVersion = "1.0.0";
 
             PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, BundleIdentifier);
-            PlayerSettings.Android.bundleVersionCode = 1;
+            // Bumped whenever the shipped data changes: the app drops its cached copies when the version
+            // it was installed as differs from the one the cache was written by, so a new build starts
+            // from its own files instead of whatever the previous install had saved.
+            PlayerSettings.Android.bundleVersionCode = 2;
 
             // The brief requires Android 9 and above.
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel28;
@@ -220,7 +223,9 @@ namespace SmallPot.EditorTools
             text.AppendLine("  ],");
             text.AppendLine($"  \"showDataSourceInfo\": {(supplied.ShowDataSourceInfo ? "true" : "false")},");
             text.AppendLine($"  \"showDebugPanel\": {(supplied.ShowDebugPanel ? "true" : "false")},");
-            text.AppendLine($"  \"requireServer\": {(supplied.RequireServer ? "true" : "false")}");
+            text.AppendLine($"  \"requireServer\": {(supplied.RequireServer ? "true" : "false")},");
+            text.AppendLine(
+                $"  \"connectionCheckSeconds\": {supplied.ConnectionCheckSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}");
             text.AppendLine("}");
 
             string path = Path.Combine(Application.streamingAssetsPath, "data", "dev.json");

@@ -218,6 +218,40 @@ namespace SmallPot.Tests
         }
 
         [Test]
+        public void LoopbackAddressesAreRecognisedSoADeviceCanDropThem()
+        {
+            // A phone can never reach the machine's own loopback, so an address pointing there is dropped
+            // on a device rather than offered, listed or suggested.
+            Assert.IsTrue(DataLoader.IsLoopbackAddress("http://127.0.0.1:8787"));
+            Assert.IsTrue(DataLoader.IsLoopbackAddress("http://127.0.0.1:8787/"));
+            Assert.IsTrue(DataLoader.IsLoopbackAddress("http://localhost:8787"));
+            Assert.IsTrue(DataLoader.IsLoopbackAddress("http://127.0.1.5:8787"));
+            Assert.IsTrue(DataLoader.IsLoopbackAddress("127.0.0.1"));
+
+            Assert.IsFalse(DataLoader.IsLoopbackAddress("http://192.168.100.30:8787"));
+            Assert.IsFalse(DataLoader.IsLoopbackAddress("http://10.0.0.7:8787"));
+            Assert.IsFalse(DataLoader.IsLoopbackAddress("https://example.com"));
+            Assert.IsFalse(DataLoader.IsLoopbackAddress(string.Empty));
+            Assert.IsFalse(DataLoader.IsLoopbackAddress(null));
+        }
+
+        [Test]
+        public void ConnectionCheckSecondsComesFromTheFileAndNeverRunsAway()
+        {
+            Assert.AreEqual(3f, DevSettings.FromJson(JsonValue.Parse("{}")).ConnectionCheckSeconds, 0.001f);
+            Assert.AreEqual(
+                5f,
+                DevSettings.FromJson(JsonValue.Parse("{\"connectionCheckSeconds\":5}")).ConnectionCheckSeconds,
+                0.001f);
+
+            // Zero would mean asking once a frame, which is worse than not asking at all.
+            Assert.AreEqual(
+                3f,
+                DevSettings.FromJson(JsonValue.Parse("{\"connectionCheckSeconds\":0}")).ConnectionCheckSeconds,
+                0.001f);
+        }
+
+        [Test]
         public void CandidateUrlsIsEmptyWhenNoServerIsConfigured()
         {
             // No address means no network attempts at all, which is what keeps a bundled-only build

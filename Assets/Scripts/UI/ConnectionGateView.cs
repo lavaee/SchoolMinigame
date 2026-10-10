@@ -29,6 +29,8 @@ namespace SmallPot
         private readonly Action<string> _onRetry;
 
         private RectTransform _root;
+        private RTLTextMeshPro _title;
+        private RTLTextMeshPro _body;
         private RTLTextMeshPro _tried;
         private RTLTextMeshPro _status;
         private TMP_InputField _address;
@@ -59,14 +61,15 @@ namespace SmallPot
             UiKit.Place(panel.rectTransform, Middle, new Vector2(0f, 0f), new Vector2(660f, 700f));
             UiKit.AddShadow(panel.rectTransform, 12f, 0.22f);
 
-            RTLTextMeshPro title = UiKit.Text(
-                "Title", panel.transform, _strings.Get("gate.title"), 40f, Palette.Ink, UiKit.Centred, true,
-                FontStyles.Bold);
-            UiKit.Place(title.rectTransform, Top, new Vector2(0f, -54f), new Vector2(580f, 56f));
+            _title = UiKit.Text(
+                "Title", panel.transform, Words("gate.title", panel.transform, "Title"), 40f, Palette.Ink,
+                UiKit.Centred, true, FontStyles.Bold);
+            UiKit.Place(_title.rectTransform, Top, new Vector2(0f, -54f), new Vector2(580f, 56f));
 
-            RTLTextMeshPro body = UiKit.Text(
-                "Body", panel.transform, _strings.Get("gate.body"), 24f, Palette.InkSoft, UiKit.Centred);
-            UiKit.Place(body.rectTransform, Top, new Vector2(0f, -158f), new Vector2(560f, 96f));
+            _body = UiKit.Text(
+                "Body", panel.transform, Words("gate.body", panel.transform, "Body"), 24f, Palette.InkSoft,
+                UiKit.Centred);
+            UiKit.Place(_body.rectTransform, Top, new Vector2(0f, -158f), new Vector2(560f, 96f));
 
             _tried = UiKit.Text(
                 "Tried", panel.transform, string.Empty, 22f, Palette.InkSoft, UiKit.Centred, false);
@@ -75,7 +78,7 @@ namespace SmallPot
             _address = UiKit.Input(
                 "Address",
                 panel.transform,
-                _strings.Get("settings.server_url_hint"),
+                Words("settings.server_url_hint", panel.transform, "Address"),
                 24f,
                 Palette.PanelEdge,
                 Palette.Ink,
@@ -85,7 +88,7 @@ namespace SmallPot
             LabeledButton retry = UiKit.Button(
                 "Retry",
                 panel.transform,
-                _strings.Get("gate.retry"),
+                Words("gate.retry", panel.transform, "Retry"),
                 30f,
                 Palette.Accent,
                 Palette.Panel,
@@ -97,7 +100,8 @@ namespace SmallPot
             UiKit.Place(_status.rectTransform, Top, new Vector2(0f, -546f), new Vector2(560f, 52f));
 
             RTLTextMeshPro hint = UiKit.Text(
-                "Hint", panel.transform, _strings.Get("gate.hint"), 20f, Palette.InkSoft, UiKit.Centred);
+                "Hint", panel.transform, Words("gate.hint", panel.transform, "Hint"), 20f, Palette.InkSoft,
+                UiKit.Centred);
             UiKit.Place(hint.rectTransform, Top, new Vector2(0f, -602f), new Vector2(580f, 96f));
 
             Hide();
@@ -140,6 +144,57 @@ namespace SmallPot
             {
                 _address.text = address ?? string.Empty;
             }
+        }
+
+        /// <summary>
+        /// Replaces the headline and the explanation.
+        ///
+        /// The gate is not always the first thing the player saw: a server can answer for a while and then
+        /// stop, and "the connection dropped" is a different sentence from "it was never there".
+        /// </summary>
+        public void SetHeadline(string titleKey, string bodyKey)
+        {
+            Set(_title, titleKey);
+            Set(_body, bodyKey);
+
+            void Set(RTLTextMeshPro label, string key)
+            {
+                // No words for this in the data: keep what is already on screen rather than putting a
+                // placeholder in front of the player.
+                if (label != null && _strings != null && _strings.Has(key))
+                {
+                    label.text = _strings.Get(key);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The words for a label: the supplied string when there is one, and otherwise whatever the scene
+        /// already has there.
+        ///
+        /// This is the one panel that may have to be shown before the data has arrived, or after a server
+        /// has answered with a copy that predates the strings this build expects. In both cases the scene
+        /// holds real words, and a placeholder would be a worse answer than the words already there.
+        /// </summary>
+        private string Words(string key, Transform parent, string widgetName)
+        {
+            string existing = null;
+            Transform widget = parent != null ? parent.Find(widgetName) : null;
+            if (widget != null)
+            {
+                // In children, because a button keeps its label in a child rather than on itself.
+                RTLTextMeshPro label = widget.GetComponentInChildren<RTLTextMeshPro>(true);
+                existing = label != null ? label.text : null;
+            }
+
+            if (_strings != null && _strings.Has(key))
+            {
+                return _strings.Get(key);
+            }
+
+            // Nothing in the data and nothing in the scene: the key itself is the honest answer, and it is
+            // what the missing-key report lists.
+            return string.IsNullOrEmpty(existing) ? (_strings != null ? _strings.Get(key) : key) : existing;
         }
 
         public void SetStatus(string message)

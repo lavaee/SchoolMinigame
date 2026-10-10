@@ -44,6 +44,29 @@ namespace SmallPot.Tests
             "common.close"
         };
 
+        /// <summary>
+        /// The keys this project added, which the supplied files know nothing about.
+        ///
+        /// They live in strings-extra.json. The gate is the screen that has to work when nothing else does,
+        /// so a missing one shows the player a key name instead of a sentence - which is exactly what
+        /// happened once, when a server was still serving an older copy of this file to a phone. Pinned
+        /// here so the file cannot lose them quietly again.
+        /// </summary>
+        private static readonly string[] ProjectKeys =
+        {
+            "gate.title",
+            "gate.body",
+            "gate.retry",
+            "gate.checking",
+            "gate.failed",
+            "gate.connected",
+            "gate.hint",
+            "gate.lost_title",
+            "gate.lost_body",
+            "gate.lost_status",
+            "settings.server_url_hint"
+        };
+
         [Test]
         public void TheSuppliedBaseFileCoversEveryKeyTheGameNeeds()
         {
@@ -68,6 +91,18 @@ namespace SmallPot.Tests
             foreach (string key in RequiredKeys)
             {
                 Assert.IsTrue(only.Has(key), $"'{key}' has to be playable from strings-base.json alone.");
+            }
+        }
+
+        [Test]
+        public void TheFilesThisProjectAddedCoverTheirOwnKeys()
+        {
+            JsonValue strings = JsonValue.Parse(RepoData.Text(StringsStore.ExtraFileName))["strings"];
+
+            foreach (string key in ProjectKeys)
+            {
+                Assert.IsTrue(strings.Has(key), $"'{key}' is missing from strings-extra.json.");
+                Assert.IsNotEmpty(strings[key].AsString(string.Empty), $"'{key}' is empty in strings-extra.json.");
             }
         }
 
