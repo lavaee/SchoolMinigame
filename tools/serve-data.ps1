@@ -4,6 +4,9 @@
 # open http://127.0.0.1:<port>/ to edit the working copy, and press "Push to clients" to make a
 # running app reload.
 #
+# It prints the addresses a phone can use - the machine on the local network over Wi-Fi, and 127.0.0.1
+# over USB - and checks the firewall rule that inbound connections need.
+#
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\serve-data.ps1
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\serve-data.ps1 -Port 8787
 
@@ -35,6 +38,37 @@ if ($adb) {
         Write-Host "Forwarded tcp:$Port to the attached device. Use http://127.0.0.1:$Port in the app."
     } else {
         Write-Host "No device is attached, so the port was not forwarded."
+    }
+}
+
+# A phone reaches this machine at its address on the network, not at 127.0.0.1, so print the addresses
+# worth typing into the app (the settings panel takes a server address) instead of leaving it to guesswork.
+$addresses = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" })
+if ($addresses) {
+    Write-Host ""
+    Write-Host "A phone on the same network can use:"
+    foreach ($address in $addresses) {
+        Write-Host "  http://$($address.IPAddress):$Port"
+    }
+}
+
+# Windows Firewall blocks inbound connections by default; this is the usual reason a phone cannot reach
+# the server even when both are on the same Wi-Fi. The rule is private-profile only, and it is added
+# only when this script is already running as an administrator.
+$ruleName = "Small Pot data server"
+$rule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+if (-not $rule) {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow `
+            -Protocol TCP -LocalPort $Port -Profile Private | Out-Null
+        Write-Host "Added a firewall rule for inbound TCP $Port on private networks."
+    } else {
+        Write-Host ""
+        Write-Host "If the phone cannot connect, allow the port once from an admin PowerShell:"
+        Write-Host "  New-NetFirewallRule -DisplayName '$ruleName' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port -Profile Private"
     }
 }
 

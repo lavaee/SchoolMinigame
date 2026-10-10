@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
@@ -100,6 +101,10 @@ namespace SmallPot.EditorTools
             // The APK must carry the employer's data files, so the bundled layer is refreshed first.
             SyncDataToStreamingAssets();
 
+            // Then the addresses this particular build should try, which the sync above has just
+            // overwritten with the committed default.
+            ApplyDataServerUrls();
+
             string outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), BuildDirectoryName);
             Directory.CreateDirectory(outputDirectory);
             string outputPath = Path.Combine(outputDirectory, ApkFileName);
@@ -164,6 +169,56 @@ namespace SmallPot.EditorTools
 
             AssetDatabase.Refresh();
             Debug.Log($"[SmallPot] Synced {copied} data file(s) to Assets/StreamingAssets/data.");
+        }
+
+        /// <summary>
+        /// Writes the data server addresses for this build into the dev.json that ships inside the APK.
+        ///
+        /// They come from the environment rather than from the project because they describe the machine
+        /// doing the building: a phone reaches the server at that machine's address on the network, and at
+        /// 127.0.0.1 when the port is forwarded over USB with "adb reverse". Both are written, so one APK
+        /// works over Wi-Fi and over a cable. An unset variable leaves dev.json alone; a variable that is
+        /// set but empty bakes no server at all, which is the bundled-only build.
+        /// </summary>
+        private static void ApplyDataServerUrls()
+        {
+            const string variable = "SMALLPOT_DATA_SERVER_URLS";
+            string raw = Environment.GetEnvironmentVariable(variable);
+            if (raw == null)
+            {
+                return;
+            }
+
+            string[] urls = raw
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(url => url.Trim().TrimEnd('/'))
+                .Where(url => url.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var text = new StringBuilder();
+            text.AppendLine("{");
+            text.AppendLine("  \"version\": 1,");
+            text.AppendLine($"  \"dataServerUrl\": \"{(urls.Length > 0 ? urls[0] : string.Empty)}\",");
+            text.AppendLine("  \"dataServerUrls\": [");
+            for (int i = 0; i < urls.Length; i++)
+            {
+                text.Append("    \"").Append(urls[i]).Append('"');
+                text.AppendLine(i < urls.Length - 1 ? "," : string.Empty);
+            }
+
+            text.AppendLine("  ],");
+            text.AppendLine("  \"showDataSourceInfo\": true,");
+            text.AppendLine("  \"showDebugPanel\": true");
+            text.AppendLine("}");
+
+            string path = Path.Combine(Application.streamingAssetsPath, "data", "dev.json");
+            File.WriteAllText(path, text.ToString(), new UTF8Encoding(false));
+            AssetDatabase.Refresh();
+
+            Debug.Log(urls.Length > 0
+                ? $"[SmallPot] The app will try: {string.Join(", ", urls)}"
+                : "[SmallPot] No data server baked; the app runs from the bundled files only.");
         }
 
         public static void SetAndroidBuildTarget()

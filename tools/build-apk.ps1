@@ -1,14 +1,19 @@
 # Builds the Android APK and checks what ended up inside it.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\build-apk.ps1
-#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\build-apk.ps1 -DataServerUrl http://127.0.0.1:8787
+#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\build-apk.ps1 -DataServerUrl http://192.168.1.20:8787
+#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\build-apk.ps1 -NoDataServer
 #
-# The optional data server URL is baked into data/dev.json, which is how the phone learns where to
-# fetch fresh content from. Without it the game still runs entirely from the bundled files.
+# The addresses the phone should try are baked into the StreamingAssets copy of data/dev.json. Left
+# alone, the default is this machine's address on the local network plus 127.0.0.1, the second one
+# covering "adb reverse tcp:8787 tcp:8787" over USB. The app keeps whichever address answers first, so
+# one APK works over Wi-Fi and over a cable. The committed data/dev.json is never rewritten by a build.
 
 [CmdletBinding()]
 param(
     [string]$DataServerUrl = "",
+    [int]$DataServerPort = 8787,
+    [switch]$NoDataServer,
     [switch]$SkipDataChecks
 )
 
@@ -28,22 +33,56 @@ if (-not $SkipDataChecks) {
     if ($LASTEXITCODE -ne 0) { throw "The supplied data files do not match the originals." }
 }
 
-if ($DataServerUrl) {
-    Write-Host "Baking data server URL: $DataServerUrl"
-    $dev = @"
-{
-  "version": 1,
-  "dataServerUrl": "$DataServerUrl",
-  "showDataSourceInfo": true,
-  "showDebugPanel": true
+# The phone cannot reach the PC's 127.0.0.1, so the default has to be this machine's address on the
+# network. Preferring the adapter that has a default gateway keeps virtual switches out of the answer.
+function Get-LanAddress {
+    try {
+        $addresses = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+            Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" })
+    } catch {
+        return $null
+    }
+
+    foreach ($address in $addresses) {
+        $config = Get-NetIPConfiguration -InterfaceIndex $address.InterfaceIndex -ErrorAction SilentlyContinue
+        if ($config -and $config.IPv4DefaultGateway) { return $address.IPAddress }
+    }
+
+    return ($addresses | Select-Object -First 1 -ExpandProperty IPAddress)
 }
-"@
-    [System.IO.File]::WriteAllText(
-        (Join-Path $root "data\dev.json"), $dev, (New-Object System.Text.UTF8Encoding($false)))
+
+$candidates = @()
+if ($NoDataServer) {
+    Write-Host "No data server: the app will run from the bundled files only."
+} else {
+    if ($DataServerUrl) {
+        $candidates += $DataServerUrl
+    } else {
+        $lan = Get-LanAddress
+        if (-not $lan) {
+            throw "No local network address was found; pass -DataServerUrl, or -NoDataServer for a bundled-only build."
+        }
+
+        $candidates += "http://${lan}:$DataServerPort"
+    }
+
+    # Over USB, "adb reverse tcp:<port> tcp:<port>" makes this address work on the phone too.
+    $candidates += "http://127.0.0.1:$DataServerPort"
+    $candidates = @($candidates | Select-Object -Unique)
+    Write-Host "The app will try: $($candidates -join ', ')"
 }
 
 & (Join-Path $PSScriptRoot "sync-data.ps1")
 if ($LASTEXITCODE -ne 0) { throw "Copying the data files into StreamingAssets failed." }
+
+# The addresses are handed to the build rather than written here, because the build syncs the data files
+# into StreamingAssets itself and would overwrite anything written before it. Unity applies this variable
+# straight after that sync, so what ships is decided in one place and cannot be lost in the middle.
+$env:SMALLPOT_DATA_SERVER_URLS = ($candidates -join ",")
+
+# The copy that ships gets the addresses above; it is put back to the committed default after the build,
+# because the repository should not hold one machine's network address and the editor wants localhost.
+$baked = Join-Path $root "Assets\StreamingAssets\data\dev.json"
 
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
 if (Test-Path $apk) { Remove-Item $apk -Force }
@@ -62,6 +101,11 @@ $arguments = @(
 
 $process = Start-Process -FilePath $unity -ArgumentList $arguments -Wait -NoNewWindow -PassThru
 Write-Host "Unity exited with code $($process.ExitCode)."
+
+# The addresses the APK needs are inside the APK now, so put the committed default back: the repository
+# should not end up holding one machine's network address, and the editor still wants localhost.
+Copy-Item (Join-Path $root "data\dev.json") $baked -Force
+Write-Host "Restored the committed data/dev.json default into StreamingAssets."
 
 $errors = Select-String -Path $log -Pattern "error CS|Build completed with a result of 'Failed'" -ErrorAction SilentlyContinue
 if ($errors) {
