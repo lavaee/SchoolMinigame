@@ -3,11 +3,13 @@
 ## Before the session
 
 1. `powershell -File tools\verify-data.ps1` — confirm the supplied files are untouched.
-2. `node server\serve.js` — serves the working copy and prints the admin URL at <http://127.0.0.1:8787/>.
-3. `powershell -File tools\build-apk.ps1 -DataServerUrl http://127.0.0.1:8787`
-4. `adb install -r Builds\SmallPot.apk`, then `adb reverse tcp:8787 tcp:8787`.
-5. Open the admin page on the laptop and the game on the phone. Open the settings panel in the game once
-   to confirm the file sources read "server", and leave the admin page on `config.json`.
+2. `powershell -File tools\build-apk.ps1` — bakes this machine's network address and `127.0.0.1`, so the
+   same APK works over Wi-Fi or over a cable.
+3. `adb install -r Builds\SmallPot.apk`, then `powershell -File tools\serve-data.ps1`. That prints the
+   addresses the phone can use, starts the server, and runs `adb reverse` when a device is attached. Over
+   Wi-Fi, allow the port when Windows asks; the script prints the one-line rule if it did not.
+4. Open the admin page at <http://127.0.0.1:8787/> and the game on the phone. Open the settings panel in
+   the game once to confirm the file sources read "server", and leave the admin page on `config.json`.
 
 Confirm the whole loop before you present: change a word in the admin page, press **Push to clients**, and
 watch the phone pick it up on its own within about ten seconds. Do it once so the moment is not the first

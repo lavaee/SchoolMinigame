@@ -120,6 +120,26 @@ exist: a preview drawn by calling into Unity is not possible from a browser, and
 sixth stage needs to see what six stages look like. The mirror is pinned by tests on both sides — the shape
 numbers, the default-mornings fallback and the thirst posture are asserted for the same values.
 
+## Why does the app try more than one address?
+
+Because one server has two addresses and the phone cannot know which one is live. Over Wi-Fi it is the
+machine's address on the network; over a USB cable it is `127.0.0.1`, made to work on the phone by
+`adb reverse tcp:8787 tcp:8787`. Baking only one of them guarantees that half the ways of connecting
+fail, and the first build of this project baked localhost — which is exactly that mistake. It worked over
+the cable and quietly fell back to bundled data over Wi-Fi, with nothing on screen to explain why.
+
+So the build bakes both, the app asks each for its revision in turn, and the first that answers becomes
+the address used from then on. Nothing else is given up for it: the bundled copy is still the floor, an
+address that is not answering yet is retried on the next poll rather than written off at launch, and the
+settings panel still takes an address by hand. The order is decided by a pure function with its own
+tests, because the order is the whole feature.
+
+The firewall is the other half of the same problem, and it cannot be solved from inside the app: Windows
+blocks inbound connections by default, so a phone on Wi-Fi is refused even when the address is right.
+`tools\serve-data.ps1` reports that state and prints the one-line rule that fixes it, adding the rule
+itself when it happens to be running as an administrator. The USB route needs no rule at all, which is
+why it stays the recommended one for a live demo.
+
 ## What did you deliberately not build?
 
 Accounts, cloud saves, leaderboards and any server-side game state. The server exists for one reason: to

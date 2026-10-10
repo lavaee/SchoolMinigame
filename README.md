@@ -22,16 +22,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\build-apk.ps1
 adb install -r Builds\SmallPot.apk
 ```
 
-Add `-DataServerUrl http://127.0.0.1:8787` to bake in a content server address.
+The build bakes two addresses into the app: this machine's address on the local network, and
+`127.0.0.1`. The app tries both and keeps whichever answers first, so one APK works over Wi-Fi and over
+a cable. `-DataServerUrl` replaces the first, and `-NoDataServer` bakes neither.
 
 **Content server with the admin UI.**
 
 ```powershell
-node server\serve.js                 # prints the admin URL and every LAN URL
-adb reverse tcp:8787 tcp:8787        # so a USB-attached phone can reach it
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\serve-data.ps1
 ```
 
-Then open <http://127.0.0.1:8787/>. `node server\test.js` runs 215 checks over the server in-process.
+That prints every address a phone can use, starts the server, and forwards the port over USB when a
+device is attached. Open <http://127.0.0.1:8787/> for the editor. If a phone on the same Wi-Fi still
+cannot connect, the firewall is almost always the reason: the script adds the rule when it is run as an
+administrator, and prints the one line to run by hand when it is not. `node server\test.js` runs 215
+checks over the server in-process.
 
 **Tests.**
 
@@ -104,6 +109,12 @@ At runtime each file is resolved in this order:
 A file that is missing, unreachable or not valid JSON simply falls through to the next source, so the
 game is fully playable with no server at all. The gear button in the top corner shows which source each
 file came from.
+
+More than one address is tried, because the same server is at a different address depending on how the
+phone is connected. The build bakes the machine's address on your network and `127.0.0.1`, and the first
+one that answers is the address used from then on. An app that starts before the server does keeps
+retrying quietly in the background, and the settings panel takes an address by hand if you would rather
+point it somewhere else without rebuilding.
 
 Two extra files are ours, not the challenge's: `data/dev.json` (the server address and debug flags) and
 `data/strings-extra.json` (optional lines the game uses when it can). Both are lowest priority, and the
