@@ -60,6 +60,12 @@ namespace SmallPot.EditorTools
             // uses UnityWebRequest, and this makes it explicit.
             PlayerSettings.Android.forceInternetPermission = true;
 
+            // Plain HTTP has to be allowed explicitly. Unity's default refuses it, and the refusal is
+            // invisible from the app's side: every request to the local server fails, the content never
+            // refreshes, and nothing on screen says why. A server on a home network has no certificate to
+            // trust, so this is the deliberate choice for this project rather than a shortcut around one.
+            PlayerSettings.insecureHttpOption = InsecureHttpOption.AlwaysAllowed;
+
             ApplyKeystoreFromEnvironment();
 
             EditorUserBuildSettings.buildAppBundle = false;
@@ -196,6 +202,10 @@ namespace SmallPot.EditorTools
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
+            // Everything that is not an address comes from the supplied file, so those flags are decided
+            // in one place and the build overrides only what it has to.
+            DevSettings supplied = ReadSuppliedDevSettings();
+
             var text = new StringBuilder();
             text.AppendLine("{");
             text.AppendLine("  \"version\": 1,");
@@ -208,8 +218,9 @@ namespace SmallPot.EditorTools
             }
 
             text.AppendLine("  ],");
-            text.AppendLine("  \"showDataSourceInfo\": true,");
-            text.AppendLine("  \"showDebugPanel\": true");
+            text.AppendLine($"  \"showDataSourceInfo\": {(supplied.ShowDataSourceInfo ? "true" : "false")},");
+            text.AppendLine($"  \"showDebugPanel\": {(supplied.ShowDebugPanel ? "true" : "false")},");
+            text.AppendLine($"  \"requireServer\": {(supplied.RequireServer ? "true" : "false")}");
             text.AppendLine("}");
 
             string path = Path.Combine(Application.streamingAssetsPath, "data", "dev.json");
@@ -219,6 +230,25 @@ namespace SmallPot.EditorTools
             Debug.Log(urls.Length > 0
                 ? $"[SmallPot] The app will try: {string.Join(", ", urls)}"
                 : "[SmallPot] No data server baked; the app runs from the bundled files only.");
+        }
+
+        /// <summary>Reads the supplied dev.json so the build inherits its flags rather than inventing them.</summary>
+        private static DevSettings ReadSuppliedDevSettings()
+        {
+            string path = Path.Combine(Directory.GetCurrentDirectory(), "data", DevSettings.FileName);
+            if (!File.Exists(path))
+            {
+                Debug.LogWarning($"[SmallPot] data/{DevSettings.FileName} was not found; build defaults are used.");
+                return new DevSettings();
+            }
+
+            if (JsonValue.TryParse(File.ReadAllText(path, Encoding.UTF8), out JsonValue root, out string error))
+            {
+                return DevSettings.FromJson(root);
+            }
+
+            Debug.LogWarning($"[SmallPot] data/{DevSettings.FileName} could not be read ({error}); defaults are used.");
+            return new DevSettings();
         }
 
         public static void SetAndroidBuildTarget()
