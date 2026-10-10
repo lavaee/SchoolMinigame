@@ -303,8 +303,15 @@ namespace SmallPot
             return string.Empty;
         }
 
-        private IEnumerator Resolve(string fileName, string serverUrl, Dictionary<string, LoadedFile> output)
-        {
+        /// <summary>
+        /// True for the file that says where the server is and how the app should behave. It comes from the
+        /// app itself - the copy inside the build, or the copy the server is serving right now - and never
+        /// from the cache, so a device cannot keep running on an address the build has moved on from.
+        /// </summary>
+        private static bool IsLocalConfiguration(string fileName) =>
+            string.Equals(fileName, DevSettings.FileName, StringComparison.OrdinalIgnoreCase);
+
+        private IEnumerator Resolve(string fileName, string serverUrl, Dictionary<string, LoadedFile> output)        {
             var file = new LoadedFile { FileName = fileName };
 
             // Layer 1: remote.
@@ -329,8 +336,11 @@ namespace SmallPot
                 }
             }
 
-            // Layer 2: cache.
-            if (file.Text == null)
+            // Layer 2: cache. Skipped for the app's own configuration file: a stale cached dev.json keeps
+            // pointing the app at an address the build has moved on from, and keeps a flag like requireServer
+            // switched off, with nothing on screen to say the copy inside the app is being ignored. The
+            // employer's content is cached exactly as before.
+            if (file.Text == null && !IsLocalConfiguration(fileName))
             {
                 string cached = ReadCache(fileName);
                 if (!string.IsNullOrEmpty(cached) && IsValidJson(cached))

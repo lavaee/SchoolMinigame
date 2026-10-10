@@ -51,7 +51,7 @@ namespace SmallPot.EditorTools
 
             // Captures play offline on purpose: a build that insists on a server would otherwise put the
             // gate up and every scenario would photograph the same screen. The gate has its own scenario.
-            GameController.SuppressServerGate = _scenario != "serverdown";
+            GameController.SuppressServerGate = _scenario != "serverdown" && _scenario != "stalecache";
 
             PrepareSave(_scenario);
 
@@ -228,6 +228,14 @@ namespace SmallPot.EditorTools
                     steps.Add("shot:gate");
                     break;
 
+                case "stalecache":
+                    // The state a phone was in after running an older build: a dev.json left in the device
+                    // cache that points at nothing and switches the gate off. It is planted in PrepareSave
+                    // and deliberately kept, so this shows which copy of the app's own configuration wins.
+                    steps.Add("wait:6");
+                    steps.Add("shot:gate-stale");
+                    break;
+
                 default:
                     Debug.LogWarning($"[SmallPot] Unknown scenario '{scenario}'; capturing the start state.");
                     steps.Add("shot:start");
@@ -354,7 +362,19 @@ namespace SmallPot.EditorTools
             // The cache of the last remote copy is cleared as well: it shadows the bundled files, so a
             // capture that depends on what the bundle says would otherwise quietly use an older server copy.
             DataLoader.ClearCache();
-            if (scenario == "start" || scenario == "minigame" || scenario == "wrong" || scenario == "reward" || scenario == "settings")
+
+            if (scenario == "stalecache")
+            {
+                // Planted after the clear, and never removed: an older copy of this file, of the kind a
+                // previous build would have cached, that would send the app nowhere and switch the gate off.
+                Directory.CreateDirectory(DataLoader.CacheDirectory);
+                File.WriteAllText(
+                    Path.Combine(DataLoader.CacheDirectory, "dev.json"),
+                    "{\"version\":1,\"dataServerUrl\":\"\",\"dataServerUrls\":[],\"requireServer\":false}");
+            }
+
+            if (scenario == "start" || scenario == "minigame" || scenario == "wrong" || scenario == "reward"
+                || scenario == "settings" || scenario == "stalecache")
             {
                 return;
             }
