@@ -1,5 +1,9 @@
 # Starts the data server and, when a phone is attached, forwards the port over USB.
 #
+# The server also hosts the content editor, so this is the one command needed before a live demo:
+# open http://127.0.0.1:<port>/ to edit the working copy, and press "Push to clients" to make a
+# running app reload.
+#
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\serve-data.ps1
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\serve-data.ps1 -Port 8787
 

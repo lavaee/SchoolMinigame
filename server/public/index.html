@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Small Pot - content</title>
+<link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+<!--
+  The editor is a thin shell: every list, form and preview below is built by admin.js from what the
+  server reports, so nothing about the game's content is duplicated here.
+-->
+<header class="topbar">
+  <div class="brand">Small Pot<span>content</span></div>
+  <div class="status">
+    <span class="chip" title="The number the app polls. It reloads when this changes.">
+      version <b id="version">-</b>
+    </span>
+    <span class="chip" title="When the version last changed.">
+      pushed <b id="pushed-at">never</b>
+    </span>
+    <span class="chip" id="edit-state">-</span>
+  </div>
+  <div class="actions">
+    <button type="button" id="reset-all" class="ghost" title="Restore all six files from the supplied copies.">Reset all</button>
+    <button type="button" id="push" class="primary">Push to clients</button>
+  </div>
+</header>
+
+<div class="banner" id="banner" hidden></div>
+
+<main class="layout">
+  <nav class="rail">
+    <h2>Files</h2>
+    <div id="rail"></div>
+    <p class="rail-note" id="rail-note"></p>
+  </nav>
+
+  <section class="editor" id="editor"></section>
+
+  <aside class="preview">
+    <h2>Live preview</h2>
+    <p class="preview-note">
+      Built from the fields above as you type, before anything is saved.
+    </p>
+    <div id="preview"></div>
+  </aside>
+</main>
+
+<script src="/admin.js"></script>
+</body>
+</html>

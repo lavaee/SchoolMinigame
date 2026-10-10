@@ -207,6 +207,15 @@ namespace SmallPot.EditorTools
                     steps.Add("shot:settings");
                     break;
 
+                case "liveupdate":
+                    // Waits out two polls: the first records the revision the server is serving, the
+                    // second notices the push. Whatever pushes runs outside the editor, on the wall clock,
+                    // which is the point - the game is not told to reload, it discovers the change.
+                    steps.Add("wait:11");
+                    steps.Add("wait:12");
+                    steps.Add("shot:liveupdate");
+                    break;
+
                 default:
                     Debug.LogWarning($"[SmallPot] Unknown scenario '{scenario}'; capturing the start state.");
                     steps.Add("shot:start");

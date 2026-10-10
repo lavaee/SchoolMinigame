@@ -77,3 +77,7 @@ crashlytics-build.properties
 # The Build Report Tool writes its own settings when a build runs; that is machine state.
 /Assets/BuildReport*
 
+# Runtime state of the data server: the editable working copy seeded from data/, and the revision.
+/server/content/
+/server/state.json
+
