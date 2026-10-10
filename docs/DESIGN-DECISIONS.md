@@ -86,6 +86,15 @@ is there, and only create it if it is not. Running the same builder in the edito
 keeps the two in step: the editor pass puts the interface in the scene, the startup pass refreshes the
 labels from the current data without replacing anything you re-skinned.
 
+That last promise needed teeth. "Update it if it is there" still meant writing every font size, colour and
+rect again on each launch, which quietly undid a hand-finished interface a frame after the scene loaded: a
+resized rect snapped back, an `RTLTextMeshPro` setting reverted, and there was no way to finish the look by
+hand. So a widget the builder *finds* is marked `AuthoredWidget`, and from then on it is left alone. The
+layout and the component parameters belong to the scene; the builder refreshes only what the data owns —
+the words, the sprites, the states. The first pass authors, every later pass defers.
+`Window/SmallPot/Rebuild Interface From Code` drops those marks, for when it is the code's own layout that
+changed and the scene should follow it.
+
 Three details follow from that, and all three are the kind of thing that looks like a bug until you know
 why:
 
@@ -139,6 +148,24 @@ blocks inbound connections by default, so a phone on Wi-Fi is refused even when 
 `tools\serve-data.ps1` reports that state and prints the one-line rule that fixes it, adding the rule
 itself when it happens to be running as an administrator. The USB route needs no rule at all, which is
 why it stays the recommended one for a live demo.
+
+## Why is the app's own configuration never read from the cache?
+
+Because it is the one file that says where the server is. `dev.json` holds the address list and the flags,
+and the loader used to treat it like the employer's content: remote first, then the cached copy, then the
+copy inside the app. That order has a trap in it. A phone that had once cached a `dev.json` — from a build
+made before an address was added, or before a flag such as `requireServer` existed — went on using that
+copy. A new APK would ship with the right address baked into it and the phone would ignore it: still
+pointing at localhost, still with the gate switched off, and nothing on screen to say so.
+
+That is the shape both reported symptoms had. A content change that was pushed and never arrived, and a
+"no connection" screen that appeared in the editor but not on the device, are the same failure seen twice:
+the app was reading an old picture of itself.
+
+So the app's own configuration skips the cache. It is either the copy inside the build or the copy the
+server is serving right now, so a device cannot keep running on an address the build has moved on from, and
+installing a new APK is enough to change where it looks. The employer's files keep the old order, because
+for content a cached copy is a feature — it is what lets the game run with no server at all.
 
 ## Why can the app refuse to start?
 

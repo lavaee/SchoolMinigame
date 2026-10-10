@@ -86,16 +86,20 @@ the scene is where you replace it.
 | The leaf and stem colours that signal thirst | `ColorPlantParts` on the rig. Turn it off when your own art carries its own colours — posture, soil wetness and the badges still say it. |
 | Your own soil surface | `SoilMaterial` on the rig. Empty keeps the stand-in; the wet-to-dry tint is applied over whatever you put there. |
 | Any interface icon | Overwrite the matching PNG in `Assets/Resources/SmallPotSprites/`. `TextureFactory` loads from there before generating anything, so your drawing wins. |
-| A panel or button background | The first sprite assigned to an `Image` is kept, so replacing it in the hierarchy survives every rebuild. Colours keep being driven, because colour is what carries state. |
+| A panel or button background, or anything else about a widget | Change it in the scene. The interface is authored once and after that it is yours: a widget already there keeps its rect, its font, its sizes, its colours and its sprite, and only the words keep coming from the data. |
 | Materials and meshes | `Assets/Materials/Generated/` and `Assets/Meshes/Generated/`. Generated in code means unsaveable, which is why the baker writes them out. |
 | The font | `FontAsset` on the `App` object. `Window/SmallPot/Generate Project` rebuilds the font atlas and the scene together. |
 | Sound | `AudioDirector` on `App` has one slot per moment — click, correct, wrong, reward, water, morning, growth, thirst. Empty is silence, so add clips one at a time. |
 | A whole new pot state | Add the stage to `growth.stages` in `config.json` plus a `pot.state.<id>` string. The visuals resolve parametrically, so nothing in the scene needs a new prefab. |
 
-Two menu items help while editing. **Small Pot / Rebuild Stand-in Scene** regenerates the camera, the
+Three menu items help while editing. **Small Pot / Rebuild Stand-in Scene** regenerates the camera, the
 lighting, the `World` and the interface from scratch and re-bakes the art — it asks first, and it only
 replaces the objects it made. **Small Pot / Bake Generated Art to Assets** writes out any art that is
-still only in memory, which is what you want after editing the generator by hand.
+still only in memory, which is what you want after editing the generator by hand. **Window/Small Pot /
+Rebuild Interface From Code** hands the interface back to the builders: it drops the marks that say a
+widget has been finished by hand, so the next build lays the whole thing out from the code again. You only
+need it when the code's own layout is what changed; a widget that is already in the scene is otherwise
+never touched again.
 
 ## Where the data lives
 
