@@ -95,6 +95,13 @@ the words, the sprites, the states. The first pass authors, every later pass def
 `Window/SmallPot/Rebuild Interface From Code` drops those marks, for when it is the code's own layout that
 changed and the scene should follow it.
 
+The line is between the runtime and a rebuild, and it is worth stating plainly because it is easy to
+assume otherwise. The *runtime* defers to the scene: every launch finds the widgets and leaves them alone.
+A *rebuild* — `Generate Project` or `Rebuild Stand-in Scene` — starts from an empty scene and writes
+everything from code, so hand-finished work inside the scene is replaced. That is the point of those menu
+items, but it should never cost a day: the scene as it was is copied into `Logs/backups/` before the
+rebuild starts.
+
 Three details follow from that, and all three are the kind of thing that looks like a bug until you know
 why:
 

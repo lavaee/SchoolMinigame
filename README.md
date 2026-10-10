@@ -99,7 +99,12 @@ still only in memory, which is what you want after editing the generator by hand
 Rebuild Interface From Code** hands the interface back to the builders: it drops the marks that say a
 widget has been finished by hand, so the next build lays the whole thing out from the code again. You only
 need it when the code's own layout is what changed; a widget that is already in the scene is otherwise
-never touched again.
+never touched again while the game runs.
+
+Note the difference between the two kinds of rebuild. **Rebuild Stand-in Scene** and **Generate Project**
+make the scene from scratch, so hand-finished work *in the scene* is replaced by what the code says — that
+is what those menu items are for. The previous scene is copied to `Logs/backups/` first, so a rebuild is
+never a one-way door. The runtime is the part that defers to you, and it does so on every launch.
 
 ## Where the data lives
 
