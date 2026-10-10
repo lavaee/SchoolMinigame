@@ -43,6 +43,7 @@ namespace SmallPot.EditorTools
             BuildScript.ConfigureAndroid();
             TMP_FontAsset primary = GenerateFontAssets();
             Material spriteMaterial = EnsureSpriteMaterial();
+            BackupCurrentScene();
             CreateMainScene(primary, spriteMaterial);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             EditorSceneManager.SaveOpenScenes();
@@ -382,6 +383,27 @@ namespace SmallPot.EditorTools
         /// pot state needs a stage in config.json and a string, and a new model or a sound is an
         /// inspector job.
         /// </summary>
+        /// <summary>
+        /// Copies the scene aside before it is rebuilt.
+        ///
+        /// The build makes the scene from scratch, so anything finished by hand inside it is replaced.
+        /// That is what the menu item promises, but it is not a promise worth losing a day's work over:
+        /// the previous scene is kept next to the logs first, so a rebuild can be undone by hand.
+        /// </summary>
+        private static void BackupCurrentScene()
+        {
+            if (!File.Exists(ScenePath))
+            {
+                return;
+            }
+
+            string directory = Path.Combine(Directory.GetCurrentDirectory(), "Logs", "backups");
+            Directory.CreateDirectory(directory);
+            string name = $"Main-{DateTime.Now:yyyyMMdd-HHmmss}.unity";
+            File.Copy(ScenePath, Path.Combine(directory, name), true);
+            Debug.Log($"[SmallPot] The scene as it was is kept at Logs/backups/{name} before the rebuild.");
+        }
+
         public static void CreateMainScene(TMP_FontAsset primaryFont, Material spriteMaterial)
         {
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
