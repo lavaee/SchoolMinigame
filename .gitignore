@@ -81,3 +81,8 @@ crashlytics-build.properties
 /server/content/
 /server/state.json
 
+
+# IDE scratch folders.
+/.idea/
+/.vscode/
+
