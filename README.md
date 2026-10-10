@@ -44,6 +44,20 @@ Then open <http://127.0.0.1:8787/>. `node server\test.js` runs 215 checks over t
 morning transition matrix, the pair game's round building, and the byte identity of the supplied data
 files. They also fail the build if any Persian text is hard-coded in a script.
 
+## How the work is laid out
+
+The brief asked for three days of history, so the commits come in three phases and each one is tagged:
+
+| Tag | What it delivered |
+| --- | --- |
+| `phase-1-data-and-rules` | the supplied files under checksum, the JSON reader, the plant model, the morning table, the string fallback chain, the pairs game, and the 72 tests |
+| `phase-2-scene-and-server` | the Persian fonts, the window and the pot, the interface, the Android build tooling, the thin content server with bundled fallback, and the docs |
+| `phase-3-authored-assets-and-live-update` | the scene baked into objects you can edit, generated art written out as real assets, sound hooks, and the content editor that pushes a revision to a running app |
+
+Each tag marks the last commit of its phase, so `git show <tag>` is a summary of that day's work. One
+honest note: this machine's clock records two calendar dates across those three phases, because the rework
+and the review ran back to back. Nothing is backdated, and `git log --date=short` shows it.
+
 ## Making it yours
 
 Nothing below needs a change of code, and none of it is final: the stand-in art is a starting point, and
@@ -54,6 +68,7 @@ the scene is where you replace it.
 | The pot, the soil, the stem, the leaves, the seed, the blossom, the badges | Drag your object into the matching slot on the `PotRig` component of `World/Pot`. |
 | How big your plant parts are | `StemUnitHeight` is how tall your stem mesh is at scale 1; `LeafUnitScale`, `SeedUnitScale` and `BadgeScale` size the rest. `MaxLeafPairs` is how many pairs a stage may show. |
 | The leaf and stem colours that signal thirst | `ColorPlantParts` on the rig. Turn it off when your own art carries its own colours — posture, soil wetness and the badges still say it. |
+| Your own soil surface | `SoilMaterial` on the rig. Empty keeps the stand-in; the wet-to-dry tint is applied over whatever you put there. |
 | Any interface icon | Overwrite the matching PNG in `Assets/Resources/SmallPotSprites/`. `TextureFactory` loads from there before generating anything, so your drawing wins. |
 | A panel or button background | The first sprite assigned to an `Image` is kept, so replacing it in the hierarchy survives every rebuild. Colours keep being driven, because colour is what carries state. |
 | Materials and meshes | `Assets/Materials/Generated/` and `Assets/Meshes/Generated/`. Generated in code means unsaveable, which is why the baker writes them out. |
