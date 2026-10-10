@@ -48,7 +48,7 @@ namespace SmallPot
         [Header("Materials")]
         public MeshRenderer Soil;
 
-        [Tooltip("Material the wet-to-dry soil tint is applied to. Tinted through a property block, so the asset is never modified.")]
+        [Tooltip("Your own soil material. Left empty, the baked stand-in stays. The wet-to-dry tint is applied over whichever material ends up on the renderer.")]
         public Material SoilMaterial;
 
         [Header("Sizes")]

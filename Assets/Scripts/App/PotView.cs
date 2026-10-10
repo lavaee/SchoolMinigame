@@ -78,6 +78,14 @@ namespace SmallPot
             _soil = rig.Soil;
             _soilBlock = new MaterialPropertyBlock();
 
+            // An empty slot means "keep the stand-in material". Assigning one is how you bring your own
+            // soil surface in, and the wet/dry tint is still applied on top of whatever is here, so
+            // thirst keeps reading on your art as well as ours.
+            if (_soil != null && rig.SoilMaterial != null)
+            {
+                _soil.sharedMaterial = rig.SoilMaterial;
+            }
+
             _plant = EnsureContainer(ref rig.PlantRoot, rig.PlantAnchor, "Plant");
             if (_plant == null)
             {
