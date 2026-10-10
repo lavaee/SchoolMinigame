@@ -35,6 +35,7 @@ namespace SmallPot
 
         private Camera _camera;
         private PotView _potView;
+        private AudioDirector _audio;
         private Transform _uiRoot;
 
         private HudView _hud;
@@ -48,17 +49,32 @@ namespace SmallPot
         private bool _busy;
         private int _pendingReward;
 
+        /// <summary>Last content revision the server reported; -1 until the first successful check.</summary>
+        private int _contentVersion = -1;
+
+        private float _nextVersionCheck;
+
+        /// <summary>
+        /// How often the running game asks the server which revision it is serving. Often enough that a
+        /// push is felt within a few seconds of the designer pressing the button, rare enough to be free.
+        /// </summary>
+        private const float VersionPollSeconds = 10f;
+
         private GameConfig Config => _bundle?.Config ?? GameConfig.Defaults();
         private StringsStore Strings => _bundle?.Strings ?? StringsStore.CreateEmpty();
 
         /// <summary>Shared so the pot view animates on the same terms as the interface.</summary>
         public MotionPrefs Motion => _motion;
 
-        public void Initialize(Camera camera, PotView potView)
+        public void Initialize(Camera camera, PotView potView, AudioDirector audio)
         {
             _camera = camera;
             _potView = potView;
+            _audio = audio;
         }
+
+        /// <summary>The sound director, if the scene has one. Nothing here requires it to exist.</summary>
+        public AudioDirector Audio => _audio;
 
         private IEnumerator Start()
         {
@@ -83,6 +99,63 @@ namespace SmallPot
                 {
                     Log.Info("Remote data changed the active bundle; rebuilding from the server copy.");
                     ApplyBundle(remote);
+                }
+            }
+
+            // Phase three: keep listening for a push. This is what makes the admin page's button reach a
+            // phone that is already open, without anyone touching the device.
+            if (!string.IsNullOrEmpty(_bundle?.Dev?.DataServerUrl))
+            {
+                StartCoroutine(VersionWatch());
+            }
+        }
+
+        /// <summary>
+        /// Watches the server's content revision and reloads when it changes.
+        ///
+        /// Deliberately quiet: it waits for a moment when nothing is in progress, never interrupts a round
+        /// set or a report, and announces itself with a brief note rather than a dialog.
+        /// </summary>
+        private IEnumerator VersionWatch()
+        {
+            _nextVersionCheck = Time.realtimeSinceStartup + VersionPollSeconds;
+
+            while (true)
+            {
+                yield return new WaitUntil(() => Time.realtimeSinceStartup >= _nextVersionCheck);
+                _nextVersionCheck = Time.realtimeSinceStartup + VersionPollSeconds;
+
+                if (_session != null && _session.Running)
+                {
+                    continue;
+                }
+
+                int version = -1;
+                yield return _loader.CheckVersion(_save.ServerUrlOverride, reported => version = reported);
+
+                if (version < 0)
+                {
+                    continue;
+                }
+
+                if (_contentVersion < 0)
+                {
+                    _contentVersion = version;
+                    continue;
+                }
+
+                if (version == _contentVersion)
+                {
+                    continue;
+                }
+
+                _contentVersion = version;
+                Log.Info($"Content revision {version} was pushed; reloading.");
+                yield return ReloadRoutine();
+
+                if (Strings.Has("content.updated"))
+                {
+                    _hud.FlashStatusChip(Strings.Get("content.updated"), 3.5f);
                 }
             }
         }
@@ -137,13 +210,11 @@ namespace SmallPot
 
         private void BuildInterface()
         {
-            if (_uiRoot != null)
-            {
-                Destroy(_uiRoot.gameObject);
-                _uiRoot = null;
-            }
-
             UiKit.EnsureEventSystem(transform);
+
+            // The canvas is reused, never rebuilt: the interface lives in the scene, so destroying it
+            // would throw away anything re-skinned by hand. The views resolve their widgets by name and
+            // update them in place.
             Canvas canvas = UiKit.CreateCanvas("UI", transform);
             _uiRoot = canvas.transform;
 
@@ -171,6 +242,24 @@ namespace SmallPot
             _hud.SetStatusChip(StatusChipText());
 
             RefreshAll(animate: false);
+        }
+
+        /// <summary>
+        /// Builds the interface for a bundle without touching the save file.
+        ///
+        /// Used by the scene baker: in the editor no game is running, so nothing may be written to disk,
+        /// but the widgets still have to exist before the scene can be saved with them in it.
+        /// </summary>
+        public void BuildInterfaceFor(DataBundle bundle)
+        {
+            if (bundle == null)
+            {
+                return;
+            }
+
+            _bundle = bundle;
+            _state = PlantState.NewGame(bundle.Config);
+            BuildInterface();
         }
 
         private string StatusChipText()
@@ -228,6 +317,7 @@ namespace SmallPot
             }
 
             Log.Info($"Watered the pot for {Config.Watering.CostDrops} drops; {_state.Drops} left.");
+            AudioDirector.Play(Sound.Water);
             _potView.PlayWaterPour();
             RefreshAll(animate: true);
             Save();
@@ -249,6 +339,7 @@ namespace SmallPot
             GameConfig config = Config;
 
             int dropsBefore = _state.Drops;
+            AudioDirector.Play(Sound.Morning);
             MorningOutcome outcome = _state.ApplyMorning(config);
             _save.MorningCount++;
             Save();
@@ -277,6 +368,16 @@ namespace SmallPot
                 default:
                     body = Strings.Get("report.nothing");
                     break;
+            }
+
+            // The verdict is heard before it is read: the report follows the sound by a beat.
+            if (outcome == MorningOutcome.Grew)
+            {
+                AudioDirector.Play(Sound.Growth);
+            }
+            else if (outcome == MorningOutcome.Thirsty)
+            {
+                AudioDirector.Play(Sound.Thirst);
             }
 
             _hud.ShowReport(Strings.Get("report.title"), body);
@@ -354,10 +455,12 @@ namespace SmallPot
                 if (correct)
                 {
                     session.Correct++;
+                    AudioDirector.Play(Sound.Correct);
                     _minigame.ShowCorrect(chosen);
                 }
                 else
                 {
+                    AudioDirector.Play(Sound.Wrong);
                     _minigame.ShowWrong(round.AnswerIndex);
                 }
 
@@ -381,6 +484,7 @@ namespace SmallPot
             bool met = config.MiniGame.MeetsRewardThreshold(session.Correct);
             _pendingReward = met ? reward : 0;
 
+            AudioDirector.Play(Sound.Reward);
             _minigame.ShowReward(met, session.Correct, reward);
 
             _rewardDismissed = false;

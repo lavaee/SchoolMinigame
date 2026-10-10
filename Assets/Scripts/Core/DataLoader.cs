@@ -155,6 +155,60 @@ namespace SmallPot
             yield return Load(string.Empty, false, done);
         }
 
+        /// <summary>
+        /// Asks the server which revision of its content it is serving, so a running client can notice a
+        /// push. Reports -1 whenever there is no server or no readable answer, because a failed poll only
+        /// ever means "nothing is waiting" - it is not an error worth surfacing.
+        /// </summary>
+        public IEnumerator CheckVersion(string serverUrlOverride, Action<int> done)
+        {
+            string baseUrl = FirstNonEmpty(LastServerUrl, serverUrlOverride);
+            if (string.IsNullOrEmpty(baseUrl))
+            {
+                done?.Invoke(-1);
+                yield break;
+            }
+
+            string text = null;
+            yield return FetchRemote(
+                baseUrl.TrimEnd('/') + "/version",
+                value => text = value,
+                _ => { });
+
+            if (string.IsNullOrEmpty(text) || !JsonValue.TryParse(text, out JsonValue root, out _))
+            {
+                done?.Invoke(-1);
+                yield break;
+            }
+
+            done?.Invoke(root["version"].AsInt(-1));
+        }
+
+        /// <summary>
+        /// Reads the bundled files straight off disk with no coroutine, so editor tools can have the real
+        /// data outside play mode. A missing file simply becomes a default, exactly as it does at runtime.
+        /// </summary>
+        public static DataBundle LoadBundledNow()
+        {
+            var files = new Dictionary<string, LoadedFile>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string fileName in AllFiles)
+            {
+                var file = new LoadedFile { FileName = fileName };
+                string path = Path.Combine(BundledDirectory, fileName);
+
+                if (File.Exists(path))
+                {
+                    file.Text = File.ReadAllText(path, Encoding.UTF8);
+                    file.Source = DataSource.Bundled;
+                }
+
+                files[fileName] = file;
+            }
+
+            return Build(files);
+        }
+
         private static string FirstNonEmpty(params string[] values)
         {
             foreach (string value in values)
