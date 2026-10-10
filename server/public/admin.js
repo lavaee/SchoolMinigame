@@ -61,7 +61,9 @@
         'report.grew': ['state'],
         'game.round': ['n', 'total'],
         'pot.growth_progress': ['done', 'total'],
-        'settings.data_source_line': ['file', 'source']
+        'settings.data_source_line': ['file', 'source'],
+        'settings.data_source_count': ['source', 'n'],
+        'update.detail': ['n']
     };
 
     // -----------------------------------------------------------------------

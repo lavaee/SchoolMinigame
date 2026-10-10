@@ -114,7 +114,9 @@ const PLACEHOLDERS = {
     // Without them the shipped extra file would produce false warnings on every load.
     'game.round': ['n', 'total'],
     'pot.growth_progress': ['done', 'total'],
-    'settings.data_source_line': ['file', 'source']
+    'settings.data_source_line': ['file', 'source'],
+    'settings.data_source_count': ['source', 'n'],
+    'update.detail': ['n']
 };
 
 const KNOWN_PLACEHOLDERS = Array.from(
