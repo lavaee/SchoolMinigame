@@ -94,7 +94,19 @@ New-Item -ItemType Directory -Path $content | Out-Null
 Copy-Item (Join-Path $defaults "*.json") $content
 Write-Host "  working copy       : seeded and ready to edit"
 
-# 5. The game and Node.js, so the other machine needs nothing installed at all.
+# 5. Line endings for the machine that will read these. cmd.exe is only reliably happy with CRLF in a .cmd
+#    file, and this one is going to be double-clicked somewhere whose Git settings nobody knows, so the
+#    copies are normalised here rather than hoped for. Both files are ASCII, which makes a BOM-less UTF-8
+#    write byte-identical to what a Windows editor would have produced.
+foreach ($name in @("start-server.cmd", "README.txt")) {
+    $path = Join-Path $output $name
+    if (Test-Path $path) {
+        $text = [System.IO.File]::ReadAllText($path) -replace "`r`n", "`n" -replace "`n", "`r`n"
+        [System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($false)))
+    }
+}
+
+# 6. The game and Node.js, so the other machine needs nothing installed at all.
 if ($IncludeApk) {
     $apk = Join-Path $root "Builds\SmallPot.apk"
     if (Test-Path $apk) {
@@ -116,7 +128,7 @@ if ($IncludeNode -and $nodeVersion) {
     Write-Host "  Node.js            : left out, as asked"
 }
 
-# 6. Prove it stands alone. The copy is put somewhere with nothing above it - no repository, no data\ - and
+# 7. Prove it stands alone. The copy is put somewhere with nothing above it - no repository, no data\ - and
 #    started there. Where it says its content came from is the check: if it still found this repository, the
 #    package would break on the machine it is meant for.
 $probe = Join-Path ([System.IO.Path]::GetTempPath()) ("smallpot-package-probe-" + [guid]::NewGuid().ToString("N"))
@@ -173,7 +185,7 @@ try {
     Remove-Item $probe -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# 7. The zip, and the numbers to quote when handing it over.
+# 8. The zip, and the numbers to quote when handing it over.
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path $output -DestinationPath $zipPath -CompressionLevel Optimal
 
