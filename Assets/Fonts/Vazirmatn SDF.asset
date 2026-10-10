@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71c1514a6bd24e1e882cebbe1904ce04, type: 3}
   m_Name: Vazirmatn SDF
   m_EditorClassIdentifier: 
-  hashCode: -1174133615
-  material: {fileID: 939094762835075029}
-  materialHashCode: -89076591
+  hashCode: 0
+  material: {fileID: 168800699431952451}
+  materialHashCode: -2006316128
   m_Version: 1.1.0
   m_SourceFontFileGUID: 64692055245f42e4ea6146a4dcdb9473
   m_SourceFontFile_EditorRef: {fileID: 12800000, guid: 64692055245f42e4ea6146a4dcdb9473, type: 3}
@@ -5293,21 +5293,6 @@ MonoBehaviour:
     m_Scale: 1
     m_AtlasIndex: 0
     m_ClassDefinitionType: 0
-  - m_Index: 1030
-    m_Metrics:
-      m_Width: 0
-      m_Height: 0
-      m_HorizontalBearingX: 0
-      m_HorizontalBearingY: 0
-      m_HorizontalAdvance: 0
-    m_GlyphRect:
-      m_X: 0
-      m_Y: 0
-      m_Width: 0
-      m_Height: 0
-    m_Scale: 1
-    m_AtlasIndex: 0
-    m_ClassDefinitionType: 0
   m_CharacterTable:
   - m_ElementType: 1
     m_Unicode: 32
@@ -6709,12 +6694,8 @@ MonoBehaviour:
     m_Unicode: 65279
     m_GlyphIndex: 1303
     m_Scale: 1
-  - m_ElementType: 1
-    m_Unicode: 8203
-    m_GlyphIndex: 1030
-    m_Scale: 1
   m_AtlasTextures:
-  - {fileID: 3860142804460413250}
+  - {fileID: 4367402045914646947}
   m_AtlasTextureIndex: 0
   m_IsMultiAtlasTexturesEnabled: 1
   m_ClearDynamicDataOnBuild: 0
@@ -9388,7 +9369,7 @@ MonoBehaviour:
   boldSpacing: 7
   italicStyle: 35
   tabSize: 10
---- !u!21 &939094762835075029
+--- !u!21 &168800699431952451
 Material:
   serializedVersion: 8
   m_ObjectHideFlags: 0
@@ -9412,7 +9393,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _MainTex:
-        m_Texture: {fileID: 3860142804460413250}
+        m_Texture: {fileID: 4367402045914646947}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
@@ -9426,9 +9407,9 @@ Material:
     - _OutlineSoftness: 0
     - _OutlineWidth: 0
     - _PerspectiveFilter: 0.875
-    - _ScaleRatioA: 0.85714287
+    - _ScaleRatioA: 1
     - _ScaleRatioB: 1
-    - _ScaleRatioC: 0.6964286
+    - _ScaleRatioC: 1
     - _ScaleX: 1
     - _ScaleY: 1
     - _ShaderFlags: 0
@@ -9454,7 +9435,7 @@ Material:
     - _OutlineColor: {r: 0, g: 0, b: 0, a: 1}
     - _UnderlayColor: {r: 0, g: 0, b: 0, a: 0.5}
   m_BuildTextureStacks: []
---- !u!28 &3860142804460413250
+--- !u!28 &4367402045914646947
 Texture2D:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
