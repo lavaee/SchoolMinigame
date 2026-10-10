@@ -140,6 +140,24 @@ blocks inbound connections by default, so a phone on Wi-Fi is refused even when 
 itself when it happens to be running as an administrator. The USB route needs no rule at all, which is
 why it stays the recommended one for a live demo.
 
+## Why can the app refuse to start?
+
+Because silence is the worst possible answer to a failed connection. The first version of this app treated
+a missing server as a shrug - the bundled files are a floor, so nothing is lost - and that is the right
+posture for the brief. It is the wrong posture for a demo whose whole point is that the content on screen
+came from the server a second ago. A phone that quietly plays bundled data looks exactly like a phone that
+received the push, and a change that never arrived looks like a change nothing was listening for. That is
+not a hypothetical: it is what happened, and it took opening the APK to find out why.
+
+So `dev.json` carries `requireServer`. With it on, the game refuses to start until an address answers,
+shows the addresses it tried, lets the address be corrected on the device, and retries every ten seconds
+on its own. With it off, the original behaviour is intact, and the status chip still reports where the
+content came from.
+
+The cost is honest to name: the app is no longer playable with no server at all, so the brief's "a dead
+server is not an error" is now a switch rather than a property. The switch is in a data file the admin page
+serves, so it can be flipped live, which is the closest thing to having both.
+
 ## What did you deliberately not build?
 
 Accounts, cloud saves, leaderboards and any server-side game state. The server exists for one reason: to

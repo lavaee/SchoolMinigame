@@ -9,16 +9,24 @@
    addresses the phone can use, starts the server, and runs `adb reverse` when a device is attached. Over
    Wi-Fi, allow the port when Windows asks; the script prints the one-line rule if it did not.
 4. Open the admin page at <http://127.0.0.1:8787/> and the game on the phone. Open the settings panel in
-   the game once to confirm the file sources read "server", and leave the admin page on `config.json`.
+   the game once to confirm the file sources read "از سرور", and leave the admin page on `config.json`. If
+   they read "همراه برنامه" instead, the phone never reached the server and the gate will be up: fix that
+   before anything else, because everything else depends on it.
 
 Confirm the whole loop before you present: change a word in the admin page, press **Push to clients**, and
 watch the phone pick it up on its own within about ten seconds. Do it once so the moment is not the first
 time.
 
-If the network misbehaves, nothing is lost: the game already runs from the bundled files. The live change
-can still be shown with `adb push` into
-`/sdcard/Android/data/com.smallpot.game/files/data/` plus the reload button in the settings panel, or by
-editing `data/` and rebuilding — the fallback order makes the demo robust rather than fragile.
+If the network misbehaves, the app says so instead of pretending: it will not start without a server, and
+the screen it shows lists the addresses it tried, takes a corrected one, and retries by itself every ten
+seconds. Two ways out that need no rebuild — start the server and wait, or type the right address on the
+phone and press **تلاش دوباره**. Over a cable, `adb reverse tcp:8787 tcp:8787` makes the baked `127.0.0.1`
+work even when Wi-Fi and the firewall are hopeless.
+
+Practise the failure once, on purpose: stop the server, open the app, and read the gate aloud. It is the
+one screen that answers "did the phone really take what I pushed?" with no guesswork. To get the brief's
+quieter behaviour back for a session, set `requireServer` to `false` in `dev.json` from the admin page and
+push; the bundled copy inside the app still insists on the next cold start.
 
 ## The one-minute phone video
 

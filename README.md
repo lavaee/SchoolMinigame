@@ -38,6 +38,17 @@ cannot connect, the firewall is almost always the reason: the script adds the ru
 administrator, and prints the one line to run by hand when it is not. `node server\test.js` runs 215
 checks over the server in-process.
 
+**The app will not start without a server.**
+
+`data/dev.json` carries a `requireServer` flag, and it is `true` in this repository. When none of the
+addresses answers, the app shows a screen that says so, lists the addresses it tried, offers a field to
+correct the address and a "try again" button, and lets nothing else happen until one of them answers. It
+also retries by itself every ten seconds, so starting the server after the app is not a dead end.
+
+That is a deliberate departure from the brief, which only asks the game to survive a missing server. Set
+`requireServer` to `false` in `data/dev.json` - or from the admin page, which serves that same file - and
+the bundled data becomes the floor again, with the status chip reporting where the content came from.
+
 **Tests.**
 
 ```powershell
