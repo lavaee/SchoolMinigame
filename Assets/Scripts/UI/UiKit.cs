@@ -198,6 +198,12 @@ namespace SmallPot
         {
             RectTransform rect = Node(name, parent);
             var image = GetOrAdd<Image>(rect.gameObject);
+            if (image.sprite == null)
+            {
+                // An Image with no sprite draws nothing at all, so a solid rectangle needs the one-pixel one.
+                image.sprite = TextureFactory.Solid();
+            }
+
             image.color = color;
             return image;
         }
@@ -362,7 +368,15 @@ namespace SmallPot
         public static Image Scrim(string name, Transform parent, UnityAction onClick = null)
         {
             RectTransform rect = Node(name, parent);
+            Stretch(rect);
             var image = GetOrAdd<Image>(rect.gameObject);
+            if (image.sprite == null)
+            {
+                // The stretch above is what blocks the clicks; the sprite is what makes the dimming visible,
+                // because an Image with no sprite draws nothing.
+                image.sprite = TextureFactory.Solid();
+            }
+
             image.color = Palette.Scrim;
 
             if (onClick != null)
@@ -375,6 +389,55 @@ namespace SmallPot
             }
 
             return image;
+        }
+
+        /// <summary>
+        /// A one-line text field. The kit had none, and the connection gate needs one: a server address
+        /// that turns out to be wrong has to be fixable on the device, not by rebuilding the app.
+        ///
+        /// Persian runs right to left, so the field, its placeholder and its caret all sit on the right.
+        /// An address is Latin and must not be reshaped or reversed, which is what forceFix false means.
+        /// </summary>
+        public static TMP_InputField Input(
+            string name,
+            Transform parent,
+            string placeholder,
+            float fontSize,
+            Color background,
+            Color ink,
+            Color placeholderInk)
+        {
+            RectTransform rect = Node(name, parent);
+            var panel = GetOrAdd<Image>(rect.gameObject);
+            if (panel.sprite == null)
+            {
+                panel.sprite = TextureFactory.RoundedRect();
+                panel.type = Image.Type.Sliced;
+            }
+
+            panel.color = background;
+
+            RectTransform viewport = Node("Viewport", rect);
+            Stretch(viewport, 18f, 8f, 18f, 8f);
+            GetOrAdd<RectMask2D>(viewport.gameObject);
+
+            RTLTextMeshPro text = Text(
+                "Text", viewport, string.Empty, fontSize, ink, TextAlignmentOptions.MidlineRight, false);
+            Stretch(text.rectTransform);
+
+            RTLTextMeshPro hint = Text(
+                "Placeholder", viewport, placeholder, fontSize, placeholderInk,
+                TextAlignmentOptions.MidlineRight, false);
+            Stretch(hint.rectTransform);
+
+            var field = GetOrAdd<TMP_InputField>(rect.gameObject);
+            field.targetGraphic = panel;
+            field.textViewport = viewport;
+            field.textComponent = text;
+            field.placeholder = hint;
+            field.lineType = TMP_InputField.LineType.SingleLine;
+            field.characterLimit = 120;
+            return field;
         }
     }
 }

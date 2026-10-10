@@ -421,6 +421,15 @@ namespace SmallPot
         public bool ShowDataSourceInfo = true;
         public bool ShowDebugPanel = true;
 
+        /// <summary>
+        /// When true the game will not start until a data server answers, and shows a retry prompt instead.
+        ///
+        /// Off is the brief's posture: the bundled files are a floor, so a missing server is not an error.
+        /// On is this project's posture for a demo that has to prove content really comes from the server -
+        /// silence is the one thing a failed connection must never be.
+        /// </summary>
+        public bool RequireServer;
+
         public static DevSettings FromJson(JsonValue root)
         {
             var settings = new DevSettings();
@@ -451,6 +460,13 @@ namespace SmallPot
             if (root.Has("showDebugPanel"))
             {
                 settings.ShowDebugPanel = GameConfig.ReadBool(root, "showDebugPanel", settings.ShowDebugPanel, new List<string>());
+            }
+
+            // Read on its own: a file that insists on a server and says nothing about the debug panel is a
+            // perfectly reasonable file, and silently ignoring the flag would be the worst kind of bug.
+            if (root.Has("requireServer"))
+            {
+                settings.RequireServer = GameConfig.ReadBool(root, "requireServer", settings.RequireServer, new List<string>());
             }
 
             return settings;

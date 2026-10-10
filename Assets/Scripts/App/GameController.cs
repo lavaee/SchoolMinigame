@@ -51,6 +51,17 @@ namespace SmallPot
 
         /// <summary>Last content revision the server reported; -1 until the first successful check.</summary>
         private int _contentVersion = -1;
+        private bool _connected;
+        private bool _watching;
+        private bool _retrying;
+        private bool _hasServer;
+        private ConnectionGateView _gate;
+
+        /// <summary>
+        /// Set by the screenshot harness, which plays offline on purpose: without it the gate would refuse
+        /// to start and every capture would be a picture of the gate. The game itself never sets it.
+        /// </summary>
+        public static bool SuppressServerGate;
 
         private float _nextVersionCheck;
 
@@ -89,25 +100,24 @@ namespace SmallPot
             yield return _loader.LoadFromDiskOnly(bundle => local = bundle);
             ApplyBundle(local);
 
-            // Phase two: if a data server is configured, refresh in the background and rebuild only if
-            // something actually changed. A dead server is not an error; it is simply ignored.
-            if (!string.IsNullOrEmpty(_bundle?.Dev?.DataServerUrl))
+            // Phase two: refresh from the data server when one is configured. A server that is not there is
+            // not an error by default - the copy on the device is enough to play - but a build can insist
+            // on one, and that case gets a screen of its own instead of a shrug.
+            _hasServer = DataLoader.CandidateUrls(_save.ServerUrlOverride, _bundle?.Dev).Count > 0;
+            if (_hasServer)
             {
-                DataBundle remote = null;
-                yield return _loader.Load(_save.ServerUrlOverride, true, bundle => remote = bundle);
-                if (remote != null && remote.AnyFileFromRemote)
-                {
-                    Log.Info("Remote data changed the active bundle; rebuilding from the server copy.");
-                    ApplyBundle(remote);
-                }
+                yield return Connect();
+            }
+
+            if (RequiresServer && !_connected && !SuppressServerGate)
+            {
+                BlockOnServer();
+                yield break;
             }
 
             // Phase three: keep listening for a push. This is what makes the admin page's button reach a
             // phone that is already open, without anyone touching the device.
-            if (!string.IsNullOrEmpty(_bundle?.Dev?.DataServerUrl))
-            {
-                StartCoroutine(VersionWatch());
-            }
+            WatchForPushes();
         }
 
         /// <summary>
@@ -158,6 +168,126 @@ namespace SmallPot
                     _hud.FlashStatusChip(Strings.Get("content.updated"), 3.5f);
                 }
             }
+        }
+
+        /// <summary>How often the gate tries again on its own while it is up.</summary>
+        private const float GateRetrySeconds = 10f;
+
+        /// <summary>
+        /// Loads the server's copy of the content and remembers whether a server answered at all.
+        ///
+        /// "A server answered" is deliberately not the same question as "the content changed": the version
+        /// watch needs to know it has a live address, and the gate needs to know when it has none.
+        /// </summary>
+        private IEnumerator Connect()
+        {
+            DataBundle remote = null;
+            yield return _loader.Load(_save.ServerUrlOverride, true, bundle => remote = bundle);
+
+            _connected = !string.IsNullOrEmpty(_loader.LastServerUrl);
+
+            if (!_connected)
+            {
+                Log.Warn("No data server answered; the copy on the device is being used.");
+                yield break;
+            }
+
+            if (remote != null && remote.AnyFileFromRemote)
+            {
+                Log.Info("Remote data changed the active bundle; rebuilding from the server copy.");
+                ApplyBundle(remote);
+            }
+        }
+
+        private void WatchForPushes()
+        {
+            if (_watching || !_hasServer)
+            {
+                return;
+            }
+
+            _watching = true;
+            StartCoroutine(VersionWatch());
+        }
+
+        /// <summary>True when this bundle insists on a server before the game may start.</summary>
+        private bool RequiresServer => _bundle != null && _bundle.Dev != null && _bundle.Dev.RequireServer;
+
+        private List<string> TriedAddresses() =>
+            DataLoader.CandidateUrls(_save.ServerUrlOverride, _bundle?.Dev);
+
+        /// <summary>
+        /// Puts the gate up and keeps trying quietly behind it.
+        ///
+        /// The retry button is the deliberate path; the loop underneath means a server that comes up a
+        /// minute later is still picked up without anyone touching the phone.
+        /// </summary>
+        private void BlockOnServer()
+        {
+            Log.Warn("This build requires a data server and none answered; waiting rather than starting.");
+
+            List<string> tried = TriedAddresses();
+            _gate?.Show(tried);
+            _gate?.SuggestAddress(tried.Count > 0 ? tried[0] : string.Empty);
+            _gate?.SetStatus(Strings.Has("gate.checking") ? Strings.Get("gate.checking") : string.Empty);
+
+            StartCoroutine(GateWatch());
+        }
+
+        private IEnumerator GateWatch()
+        {
+            while (_gate != null && _gate.Visible)
+            {
+                yield return new WaitForSecondsRealtime(GateRetrySeconds);
+                yield return RetryConnection();
+            }
+        }
+
+        /// <summary>The gate's retry: remembers a corrected address and tries again.</summary>
+        private void RequestRetry(string address)
+        {
+            if (!string.IsNullOrEmpty(address) &&
+                !string.Equals(address, _save.ServerUrlOverride, StringComparison.Ordinal))
+            {
+                _save.ServerUrlOverride = address;
+                if (!SaveStore.Save(_save, out string error))
+                {
+                    Log.Warn($"The corrected address could not be saved ({error}); it will still be used now.");
+                }
+            }
+
+            StartCoroutine(RetryConnection());
+        }
+
+        private IEnumerator RetryConnection()
+        {
+            if (_retrying)
+            {
+                yield break;
+            }
+
+            _retrying = true;
+            _gate?.SetStatus(Strings.Has("gate.checking") ? Strings.Get("gate.checking") : string.Empty);
+
+            _hasServer = DataLoader.CandidateUrls(_save.ServerUrlOverride, _bundle?.Dev).Count > 0;
+            yield return Connect();
+            _retrying = false;
+
+            if (_connected)
+            {
+                _gate?.Hide();
+                if (Strings.Has("gate.connected"))
+                {
+                    _hud.FlashStatusChip(Strings.Get("gate.connected"), 3.5f);
+                }
+
+                WatchForPushes();
+                yield break;
+            }
+
+            _gate?.Show(TriedAddresses());
+            _gate?.SetStatus(Strings.Has("gate.failed") ? Strings.Get("gate.failed") : string.Empty);
+            AudioDirector.Play(Sound.Wrong);
         }
 
         // ---- Data ------------------------------------------------------------------------------
@@ -234,6 +364,10 @@ namespace SmallPot
             _settings.Build(canvas.transform);
             _settings.ReloadRequested += OnReloadRequested;
             _settings.ResetSaveRequested += OnResetSaveRequested;
+
+            // Last, so that it covers everything else when it has to.
+            _gate = new ConnectionGateView(Strings, RequestRetry);
+            _gate.Build(canvas.transform);
 
             _deferredRebuild = false;
 

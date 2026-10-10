@@ -206,6 +206,18 @@ namespace SmallPot.Tests
         }
 
         [Test]
+        public void DevSettingsRequiresAServerOnlyWhenTheFileSaysSo()
+        {
+            // Insisting on a server is a build's decision, not a hard-wired one: with the flag off, a
+            // missing server is the shrug the brief asks for; with it on, the game refuses to start rather
+            // than quietly pretending everything is current.
+            Assert.IsFalse(DevSettings.FromJson(JsonValue.Parse("{}")).RequireServer);
+            Assert.IsFalse(DevSettings.FromJson(
+                JsonValue.Parse("{\"dataServerUrl\":\"http://192.168.1.20:8787\"}")).RequireServer);
+            Assert.IsTrue(DevSettings.FromJson(JsonValue.Parse("{\"requireServer\":true}")).RequireServer);
+        }
+
+        [Test]
         public void CandidateUrlsIsEmptyWhenNoServerIsConfigured()
         {
             // No address means no network attempts at all, which is what keeps a bundled-only build

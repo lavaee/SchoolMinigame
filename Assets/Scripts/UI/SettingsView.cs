@@ -47,6 +47,7 @@ namespace SmallPot
             _root = UiKit.Stretch(UiKit.Node("Settings", parent));
             _root.gameObject.SetActive(false);
 
+            UiKit.Stretch(_root);
             UiKit.Scrim("Scrim", _root, Close);
 
             Image panel = UiKit.Panel("Panel", _root, Palette.Panel, 36);
@@ -218,16 +219,20 @@ namespace SmallPot
 
             _sourceLines.text = builder.ToString().TrimEnd('\n');
 
+            // Every address the game will try, in the order it tries them: when a phone cannot reach the
+            // server, this line is the first thing worth reading.
+            List<string> addresses = DataLoader.CandidateUrls(string.Empty, bundle.Dev);
+            bool hasUrl = addresses.Count > 0;
+
             if (_serverLine != null)
             {
-                bool hasUrl = !string.IsNullOrEmpty(bundle.Dev.DataServerUrl);
                 _serverLine.gameObject.SetActive(hasUrl);
-                _serverLine.text = hasUrl ? bundle.Dev.DataServerUrl : string.Empty;
+                _serverLine.text = hasUrl ? string.Join("\n", addresses) : string.Empty;
             }
 
             if (_reloadButton != null)
             {
-                _reloadButton.Root.SetActive(!string.IsNullOrEmpty(bundle.Dev.DataServerUrl));
+                _reloadButton.Root.SetActive(hasUrl);
             }
 
             RefreshMissingKeys();

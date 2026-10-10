@@ -49,6 +49,10 @@ namespace SmallPot.EditorTools
             SessionState.SetString(DirectoryKey, _outputDirectory);
             SessionState.SetBool(ActiveKey, true);
 
+            // Captures play offline on purpose: a build that insists on a server would otherwise put the
+            // gate up and every scenario would photograph the same screen. The gate has its own scenario.
+            GameController.SuppressServerGate = _scenario != "serverdown";
+
             PrepareSave(_scenario);
 
             EditorSceneManager.OpenScene(ProjectSetup.ScenePath);
@@ -216,6 +220,14 @@ namespace SmallPot.EditorTools
                     steps.Add("shot:liveupdate");
                     break;
 
+                case "serverdown":
+                    // The gate: no server answers, so the game refuses to start. The bundled dev.json has
+                    // to be pointed at an address that cannot answer, which is what makes this scenario
+                    // worth running by hand rather than as part of the set.
+                    steps.Add("wait:6");
+                    steps.Add("shot:gate");
+                    break;
+
                 default:
                     Debug.LogWarning($"[SmallPot] Unknown scenario '{scenario}'; capturing the start state.");
                     steps.Add("shot:start");
@@ -338,6 +350,10 @@ namespace SmallPot.EditorTools
         private static void PrepareSave(string scenario)
         {
             SaveStore.Delete();
+
+            // The cache of the last remote copy is cleared as well: it shadows the bundled files, so a
+            // capture that depends on what the bundle says would otherwise quietly use an older server copy.
+            DataLoader.ClearCache();
             if (scenario == "start" || scenario == "minigame" || scenario == "wrong" || scenario == "reward" || scenario == "settings")
             {
                 return;
