@@ -14,14 +14,14 @@ ScriptedImporter:
     nodeNameMethod: 0
     animationMethod: 0
     generateMipMaps: 0
-    texturesReadable: 1
+    texturesReadable: 0
     defaultMinFilterMode: 9729
     defaultMagFilterMode: 9729
     anisotropicFilterLevel: 1
   instantiationSettings:
-    mask: -1
+    mask: 2
     layer: 0
-    skinUpdateWhenOffscreen: 1
+    skinUpdateWhenOffscreen: 0
     lightIntensityFactor: 1
     sceneObjectCreation: 2
   assetDependencies: []
