@@ -636,7 +636,11 @@ namespace SmallPot
                 // plainly dry and the button was plainly pressed, so without this the tap does nothing at
                 // all. The other refusals already explain themselves - the pot is watered, or the hint key
                 // says it is fully bloomed - and are deliberately left silent.
-                if (allowAtFullBloom && _state.Drops < Config.Watering.CostDrops)
+                // Deliberately not gated on allowAtFullBloom. That flag says whether watering at full bloom
+                // is permitted at all, and it is false whenever the hint key exists - which is every shipped
+                // build - so testing it here made this branch unreachable and the tap entirely silent. What
+                // belongs in the test is the reason the refusal happened, not a configuration flag.
+                if (_state.Drops < Config.Watering.CostDrops)
                 {
                     AudioDirector.Play(Sound.NoWater);
                     _notice.Show();

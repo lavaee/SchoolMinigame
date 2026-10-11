@@ -23,33 +23,9 @@ namespace SmallPot.EditorTools
     public static class ProjectSetup
     {
         public const string ScenePath = "Assets/Scenes/Main.unity";
-
-        /// <summary>
-        /// Lalezar is the game's typeface: a Persian display face that reads as a game rather than as a
-        /// document. It is under the SIL Open Font License, and the licence is kept beside it as
-        /// Lalezar-OFL.txt.
-        /// </summary>
-        public const string PrimaryFontPath = "Assets/Fonts/Lalezar-Regular.ttf";
-
-        /// <summary>
-        /// Amiri stays registered as the glyph fallback.
-        ///
-        /// Lalezar covers the Persian set, and a fallback only draws a character the primary font has no
-        /// glyph for - which is better than a blank box. That is a safety net for missing glyphs, not the
-        /// interface being set in Amiri.
-        /// </summary>
+        public const string PrimaryFontPath = "Assets/Fonts/Vazirmatn-Regular.ttf";
         public const string FallbackFontPath = "Assets/Fonts/Amiri-Regular.ttf";
-
-        /// <summary>
-        /// Generated under Resources so the game can find it at runtime by name.
-        ///
-        /// That matters because the scene carries a serialised reference written by an earlier generation,
-        /// and the scene belongs to whoever is authoring it rather than to this generator. GameBootstrap
-        /// loads this asset and decides which of the two the interface should use.
-        /// </summary>
-        public const string PrimaryFontAssetPath =
-            "Assets/Resources/" + GameBootstrap.FontResourcePath + ".asset";
-
+        public const string PrimaryFontAssetPath = "Assets/Fonts/Vazirmatn SDF.asset";
         public const string FallbackFontAssetPath = "Assets/Fonts/Amiri SDF.asset";
         public const string ArabicRangesPath = "Assets/3rdPartyPackages/RTLTMPro/Ranges/ArabicAll.txt";
         public const string SpriteMaterialPath = "Assets/Materials/SpriteDefault.mat";
@@ -188,14 +164,6 @@ namespace SmallPot.EditorTools
                 AtlasHeight,
                 AtlasPopulationMode.Dynamic,
                 true);
-
-            // The folder is created rather than assumed. The primary asset lives under Resources, and a
-            // missing directory would fail the generation at the last step with nothing to show for it.
-            string directory = Path.GetDirectoryName(assetPath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
 
             fontAsset.name = Path.GetFileNameWithoutExtension(assetPath);
             AssetDatabase.CreateAsset(fontAsset, assetPath);
