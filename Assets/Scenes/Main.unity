@@ -24,7 +24,7 @@ RenderSettings:
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
   m_AmbientIntensity: 0
-  m_AmbientMode: 0
+  m_AmbientMode: 1
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
   m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
   m_HaloStrength: 0.5
@@ -5851,6 +5851,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Composition_24
       objectReference: {fileID: 0}
+    - target: {fileID: 5201575286773621656, guid: 1958e6bc45e81464a856c75115bdde61, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 6220343087540786860, guid: 1958e6bc45e81464a856c75115bdde61, type: 3}
       propertyPath: m_LocalPosition.x
       value: 1.278004
@@ -5890,6 +5894,14 @@ PrefabInstance:
     - target: {fileID: 6220343087540786860, guid: 1958e6bc45e81464a856c75115bdde61, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6423345508335949968, guid: 1958e6bc45e81464a856c75115bdde61, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 8213094067741065141, guid: 1958e6bc45e81464a856c75115bdde61, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -8146,7 +8158,7 @@ Light:
   m_Type: 2
   m_Shape: 0
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 0.5
+  m_Intensity: 0.65
   m_Range: 10
   m_SpotAngle: 90.43625
   m_InnerSpotAngle: 21.80208
@@ -8185,7 +8197,7 @@ Light:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RenderingLayerMask: 1
-  m_Lightmapping: 1
+  m_Lightmapping: 2
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
   m_BounceIntensity: 1
@@ -8240,7 +8252,7 @@ Light:
   m_Type: 1
   m_Shape: 0
   m_Color: {r: 1, g: 0.8563785, b: 0.5990566, a: 1}
-  m_Intensity: 1
+  m_Intensity: 1.2
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -13052,6 +13064,26 @@ PrefabInstance:
     - target: {fileID: 872970631344902705, guid: 400b95143e198ca41bd964c74765ff09, type: 3}
       propertyPath: m_Name
       value: Composition_33
+      objectReference: {fileID: 0}
+    - target: {fileID: 872970631344902705, guid: 400b95143e198ca41bd964c74765ff09, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 5036021850924459998, guid: 400b95143e198ca41bd964c74765ff09, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 5036021851015648401, guid: 400b95143e198ca41bd964c74765ff09, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 5036021851786580852, guid: 400b95143e198ca41bd964c74765ff09, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 6353286083959209817, guid: 400b95143e198ca41bd964c74765ff09, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8875722071788151068, guid: 400b95143e198ca41bd964c74765ff09, type: 3}
       propertyPath: m_LocalPosition.x
