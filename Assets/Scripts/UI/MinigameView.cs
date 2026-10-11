@@ -30,6 +30,15 @@ namespace SmallPot
         private RTLTextMeshPro _prompt;
         private Image _timeFill;
         private readonly List<LabeledButton> _options = new List<LabeledButton>();
+
+        /// <summary>
+        /// The answer words exactly as they arrived from data.
+        ///
+        /// Kept because an RTLTextMeshPro's own text is the shaped result, and shaping cannot be done twice:
+        /// reading a label back and assigning it somewhere else turns a word into presentation forms that no
+        /// longer read as words. Every quotation of an answer uses this list, never a label.
+        /// </summary>
+        private readonly List<string> _choiceTexts = new List<string>();
         private RectTransform _feedbackRow;
         private Image _feedbackIcon;
         private RTLTextMeshPro _feedbackText;
@@ -201,6 +210,12 @@ namespace SmallPot
         {
             ClearFeedback();
 
+            _choiceTexts.Clear();
+            for (int i = 0; choices != null && i < choices.Count; i++)
+            {
+                _choiceTexts.Add(choices[i]);
+            }
+
             for (int i = 0; i < _options.Count; i++)
             {
                 LabeledButton option = _options[i];
@@ -222,23 +237,52 @@ namespace SmallPot
             }
         }
 
+        /// <summary>The interface's colours and icons from data/dev.json, never null.</summary>
+        private static DevSettings.UiSettings Ui =>
+            (DevSettings.Current != null ? DevSettings.Current.Ui : null) ?? DevSettings.UiSettings.Default;
+
+        /// <summary>
+        /// Sets an icon from data.
+        ///
+        /// The tint follows the art: a generated icon is a white silhouette and needs one, while a
+        /// replaced icon carries its own colours and tinting it is how somebody's artwork ends up the
+        /// wrong colour. A tint in the data overrules that either way.
+        /// </summary>
+        private static void ApplyIcon(Image image, string key, Sprite fallback, string tint, Color fallbackTint)
+        {
+            if (image == null)
+            {
+                return;
+            }
+
+            image.sprite = TextureFactory.Named(key, fallback);
+            image.color = Palette.Tint(tint, TextureFactory.HasAuthored(key), fallbackTint);
+        }
+
         /// <summary>Correct answer: celebrate in place, at the option the player actually chose.</summary>
         public void ShowCorrect(int chosenIndex)
         {
+            DevSettings.UiSettings ui = Ui;
+
             _feedbackRow.gameObject.SetActive(true);
-            _feedbackIcon.sprite = TextureFactory.Check();
-            _feedbackIcon.color = Palette.Accent;
+            ApplyIcon(_feedbackIcon, ui.CorrectIcon, TextureFactory.Check(), ui.CorrectTint, Palette.Accent);
             _feedbackText.text = _strings.Display(_strings.Get("game.correct"));
-            _feedbackText.color = Palette.Accent;
+            _feedbackText.color = Palette.Colour(ui.CorrectTint, Palette.Accent);
 
             for (int i = 0; i < _options.Count; i++)
             {
                 _options[i].SetInteractable(false);
                 if (i == chosenIndex)
                 {
-                    _options[i].Background.color = Palette.Accent;
-                    _options[i].Label.color = Color.white;
+                    _options[i].Background.color = Palette.Colour(ui.AnswerCorrectBackground, Palette.Accent);
+                    _options[i].Label.color = Palette.Colour(ui.AnswerCorrectLabel, Color.white);
                 }
+            }
+
+            Juice.Punch(_feedbackIcon.transform);
+            if (chosenIndex >= 0 && chosenIndex < _options.Count)
+            {
+                Juice.Jelly(_options[chosenIndex].Rect);
             }
         }
 
@@ -253,28 +297,35 @@ namespace SmallPot
 
         private void ShowWrong(int correctIndex, string template)
         {
-            string answer = correctIndex >= 0 && correctIndex < _options.Count
-                ? _options[correctIndex].Label.text
+            // The source word, never _options[correctIndex].Label.text: that is already shaped.
+            string answer = correctIndex >= 0 && correctIndex < _choiceTexts.Count
+                ? _choiceTexts[correctIndex]
                 : string.Empty;
 
+            DevSettings.UiSettings ui = Ui;
+
             _feedbackRow.gameObject.SetActive(true);
-            _feedbackIcon.sprite = TextureFactory.Cross();
-            _feedbackIcon.color = Palette.Caution;
+            ApplyIcon(_feedbackIcon, ui.WrongIcon, TextureFactory.Cross(), ui.WrongTint, Palette.Caution);
             _feedbackText.text = _strings.Display(_strings.FormatAnswer("game.wrong", answer));
             _feedbackText.color = Palette.Ink;
 
             for (int i = 0; i < _options.Count; i++)
             {
                 _options[i].SetInteractable(false);
-                _options[i].Background.color = Palette.PanelEdge;
-                _options[i].Label.color = Palette.InkSoft;
+                _options[i].Background.color = Palette.Colour(ui.AnswerWrongBackground, Palette.PanelEdge);
+                _options[i].Label.color = Palette.Colour(ui.AnswerWrongLabel, Palette.InkSoft);
 
                 if (i == correctIndex)
                 {
-                    _options[i].Background.color = Palette.AccentSoft;
-                    _options[i].Label.color = Palette.Accent;
+                    _options[i].Background.color = Palette.Colour(ui.AnswerRevealBackground, Palette.AccentSoft);
+                    _options[i].Label.color = Palette.Colour(ui.AnswerRevealLabel, Palette.Accent);
                 }
             }
+
+            // A wrong answer should be felt as well as read, but only a little: a hard shake would turn a
+            // kind correction into a telling-off.
+            Juice.Shake(_feedbackRow);
+            Juice.Punch(_feedbackIcon.transform);
         }
 
         public void ClearFeedback()
@@ -294,6 +345,7 @@ namespace SmallPot
         public void ShowReward(bool metThreshold, int correct, int reward)
         {
             GameConfig config = Configuration;
+            DevSettings.UiSettings ui = Ui;
 
             _gamePanel.gameObject.SetActive(false);
             _rewardPanel.gameObject.SetActive(true);
@@ -305,15 +357,20 @@ namespace SmallPot
                 if (hasTitle)
                 {
                     _rewardTitle.text = _strings.Display(_strings.Get("game.reward_title"));
+                    Juice.RevealText(_rewardTitle, null, 0.45f);
                 }
             }
 
             if (metThreshold)
             {
-                _rewardIcon.sprite = TextureFactory.Droplet();
-                _rewardIcon.color = Palette.Water;
+                ApplyIcon(_rewardIcon, ui.RewardMetIcon, TextureFactory.Droplet(), ui.RewardMetTint, Palette.Water);
                 _rewardText.text = _strings.Display(_strings.FormatNumber("game.reward", reward));
                 _rewardText.color = Palette.Ink;
+
+                // The moment is meant to be felt: the panel wobbles, the icon overshoots and the number
+                // counts up, so the reward arrives as movement rather than as a number that changed.
+                Juice.Jelly(_rewardPanel, 0.03f);
+                Juice.Punch(_rewardIcon.transform, 0.28f, 0.5f);
 
                 if (_rewardCountUp != null)
                 {
@@ -326,12 +383,15 @@ namespace SmallPot
             }
             else
             {
-                // No reward is met with a sprout, not a cross: the player did nothing wrong.
-                _rewardIcon.sprite = TextureFactory.Leaf();
-                _rewardIcon.color = Palette.Leaf;
+                // No reward is met with a sprout, not a cross: the player did nothing wrong. The icon is
+                // whatever the data names, and with none named the tint follows the art - a replaced leaf
+                // keeps its own colours instead of being forced green.
+                ApplyIcon(_rewardIcon, ui.RewardMissedIcon, TextureFactory.Leaf(), ui.RewardMissedTint, Palette.Leaf);
                 _rewardNumber.text = string.Empty;
                 _rewardText.text = _strings.Display(_strings.Get("game.no_reward"));
                 _rewardText.color = Palette.Ink;
+
+                Juice.Punch(_rewardIcon.transform, 0.18f, 0.45f);
             }
         }
 

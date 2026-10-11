@@ -37,6 +37,30 @@ namespace SmallPot
             return sprite;
         }
 
+        /// <summary>
+        /// True when the project really contains this sprite rather than the generated stand-in.
+        ///
+        /// Worth knowing because the two want opposite treatment: a generated icon is a white silhouette
+        /// that only becomes an icon once it is tinted, while a replaced one carries its own colours and
+        /// tinting it is how somebody's artwork ends up the wrong colour.
+        /// </summary>
+        public static bool HasAuthored(string key) =>
+            !string.IsNullOrEmpty(key) && Resources.Load<Sprite>($"{SpriteFolder}/{key}") != null;
+
+        /// <summary>
+        /// A sprite chosen by name, for the icons the data picks. An unknown name falls back to the
+        /// built-in drawing, so a typo in the data costs a look rather than a blank space.
+        /// </summary>
+        public static Sprite Named(string key, Sprite fallback)
+        {
+            if (string.IsNullOrEmpty(key))
+            {
+                return fallback;
+            }
+
+            return Cached(key, () => fallback);
+        }
+
         /// <summary>The engine's built-in white sprite for solid rectangles (panels, button bodies).</summary>
         public static Sprite Solid() => Cached("solid", () =>
         {

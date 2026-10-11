@@ -386,6 +386,10 @@ namespace SmallPot
                 Background = image
             };
 
+            // Every button the kit builds gets the squish under the press, so no view has to remember to
+            // ask for it and a button added later cannot forget.
+            GetOrAdd<ButtonJuice>(rect.gameObject);
+
             RectTransform labelRect = Stretch(Node("Label", rect), 16f, 4f, 16f, 4f);
             result.Label = Text(labelRect, label, labelSize, labelColor);
 
@@ -430,6 +434,10 @@ namespace SmallPot
             RectTransform rect = Node(name, parent);
             Stretch(rect);
             var image = GetOrAdd<Image>(rect.gameObject);
+
+            // A scrim fades rather than pops: it covers the screen, so scaling it would read as the whole
+            // room lurching. Fade-only also keeps it out of the way of the panel arriving on top of it.
+            GetOrAdd<PanelJuice>(rect.gameObject).Scale = false;
             if (!HandedOver(rect))
             {
                 if (image.sprite == null)

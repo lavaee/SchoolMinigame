@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using DG.Tweening;
 using RTLTMPro;
 using TMPro;
 using UnityEngine;
@@ -17,11 +18,21 @@ namespace SmallPot
     /// </summary>
     public sealed class SettingsView
     {
+        /// <summary>
+        /// How long the headline waits before it starts arriving.
+        ///
+        /// Long enough that the panel's own pop has settled and the reveal reads as a second beat rather
+        /// than as part of the same blur.
+        /// </summary>
+        private const float RevealDelaySeconds = 0.25f;
+
         private readonly StringsStore _strings;
         private readonly MotionPrefs _motion;
         private readonly Func<DataBundle> _bundle;
 
         private RectTransform _root;
+        private PanelJuice _rootJuice;
+        private RTLTextMeshPro _title;
         private Image _motionCheck;
         private RTLTextMeshPro _motionHint;
         private RTLTextMeshPro _sourceLines;
@@ -55,9 +66,16 @@ namespace SmallPot
             UiKit.AddShadow(panel.rectTransform, 12f, 0.25f);
             _content = panel.rectTransform;
 
-            RTLTextMeshPro title = UiKit.Text(
+            // Two entrances, because they are two different things. The root carries the scrim, so it
+            // fades and must not be resized; the panel on top of it pops. Leave() on the root fades the
+            // whole overlay out and deactivates it, which is what actually closes this screen.
+            _rootJuice = UiKit.GetOrAdd<PanelJuice>(_root.gameObject);
+            _rootJuice.Scale = false;
+            UiKit.GetOrAdd<PanelJuice>(panel.gameObject);
+
+            _title = UiKit.Text(
                 "Title", panel.transform, _strings.Get("settings.title"), 40f, Palette.Ink, UiKit.Centred, true, FontStyles.Bold);
-            UiKit.Band(title.rectTransform, true, 24f, 52f);
+            UiKit.Band(_title.rectTransform, true, 24f, 52f);
 
             BuildMotionRow(panel.transform);
             BuildDataSourceSection(panel.transform);
@@ -168,19 +186,51 @@ namespace SmallPot
 
         public void Show()
         {
+            // Read before the switch: Show is called again to refresh an open panel, and a headline that
+            // re-reveals every time is a stutter rather than an entrance.
+            bool wasOpen = IsOpen;
+
             _root.gameObject.SetActive(true);
             RefreshMotionState();
             RefreshDataSource();
+
+            if (!wasOpen)
+            {
+                RevealAfterEntrance(_title);
+            }
         }
 
         public void Close()
         {
             if (_root != null)
             {
-                _root.gameObject.SetActive(false);
+                // Faded out rather than switched off in the same frame it was switched on: the panel was
+                // animated in, and cutting it off mid-flight is what makes an entrance look like a bug.
+                if (_rootJuice != null)
+                {
+                    _rootJuice.Leave();
+                }
+                else
+                {
+                    _root.gameObject.SetActive(false);
+                }
             }
 
             Closed?.Invoke();
+        }
+
+        /// <summary>
+        /// Starts the headline's reveal once the panel has finished arriving.
+        ///
+        /// Unscaled, like every other entrance here: the settings panel is routinely opened over a game
+        /// that is paused, and a reveal that waits for a time scale that never leaves zero never happens.
+        /// </summary>
+        private static void RevealAfterEntrance(TMP_Text label)
+        {
+            DOTween.Sequence()
+                .SetUpdate(true)
+                .AppendInterval(RevealDelaySeconds)
+                .OnComplete(() => Juice.RevealText(label));
         }
 
         public bool IsOpen => _root != null && _root.gameObject.activeSelf;

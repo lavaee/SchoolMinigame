@@ -13,7 +13,7 @@
     "settings.reload": "خواندن دوباره",
     "settings.reload_done": "داده‌ها دوباره خوانده شد.",
     "settings.reload_failed": "سرور پاسخ نداد؛ از داده‌های موجود استفاده می‌کنیم.",
-    "settings.reduce_motion_hint": "پویانمایی‌ها کنار می‌روند؛ وضعیت‌ها همچنان دیده می‌شوند.",
+    "settings.reduce_motion_hint": "انیمیشن های UI حذف میشود",
     "content.updated": "محتوا به‌روز شد.",
     "content.pending": "به‌روزرسانی آماده",
     "update.title": "نسخه‌ی تازه رسید",

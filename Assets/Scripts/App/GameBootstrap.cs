@@ -88,6 +88,11 @@ namespace SmallPot
             }
 
             potView.Initialize(PotRig, Camera, controller.Motion);
+
+            // The gate every animation consults, published once so a widget's own juice component does not
+            // have to search the scene for the controller on every tap.
+            Juice.Prefs = controller.Motion;
+
             controller.Initialize(Camera, potView, Audio);
         }
     }

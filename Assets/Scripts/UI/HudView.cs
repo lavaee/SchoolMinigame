@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using DG.Tweening;
 using RTLTMPro;
 using TMPro;
 using UnityEngine;
@@ -17,6 +18,12 @@ namespace SmallPot
     /// </summary>
     public sealed class HudView
     {
+        /// <summary>
+        /// How long the report card's headline waits before it starts arriving, so the reveal reads as a
+        /// second beat after the card's own pop rather than as part of the same blur.
+        /// </summary>
+        private const float RevealDelaySeconds = 0.25f;
+
         private readonly MonoBehaviour _host;
         private readonly StringsStore _strings;
         private readonly MotionPrefs _motion;
@@ -24,6 +31,7 @@ namespace SmallPot
 
         private RTLTextMeshPro _dropNumber;
         private RTLTextMeshPro _dropLabel;
+        private RectTransform _dropPill;
         private RTLTextMeshPro _stateCaption;
         private RTLTextMeshPro _growthLine;
         private RTLTextMeshPro _waterLabel;
@@ -45,7 +53,7 @@ namespace SmallPot
         private string _chipText = string.Empty;
 
         private RectTransform _reportCard;
-        private CanvasGroup _reportGroup;
+        private PanelJuice _reportJuice;
         private RTLTextMeshPro _reportTitle;
         private RTLTextMeshPro _reportBody;
         private LabeledButton _reportContinue;
@@ -85,6 +93,7 @@ namespace SmallPot
             Image pill = UiKit.Panel("Drop Counter", Root, Palette.Panel, 30);
             UiKit.Place(pill.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -26f), new Vector2(268f, 120f));
             UiKit.AddShadow(pill.rectTransform);
+            _dropPill = pill.rectTransform;
 
             Image icon = UiKit.Icon("Droplet", pill.transform, TextureFactory.Droplet(), Palette.Water);
             UiKit.Place(icon.rectTransform, new Vector2(0f, 0.5f), new Vector2(30f, 0f), new Vector2(62f, 62f));
@@ -161,8 +170,12 @@ namespace SmallPot
             _reportCard.pivot = new Vector2(0.5f, 0f);
             _reportCard.sizeDelta = new Vector2(0f, 360f);
             _reportCard.anchoredPosition = Vector2.zero;
-            _reportGroup = UiKit.Group(card.gameObject);
             UiKit.AddShadow(_reportCard);
+
+            // The card owns its own entrance and exit: it pops when it is switched on, and Leave fades it
+            // out before switching it off, so dismissing the report cannot cut the fade in half. The
+            // component supplies the canvas group, which is why this no longer creates one of its own.
+            _reportJuice = UiKit.GetOrAdd<PanelJuice>(card.gameObject);
 
             RectTransform titleRect = UiKit.Stretch(UiKit.Node("Title", card.transform), 40f, 268f, 40f, 28f);
             _reportTitle = UiKit.Text(titleRect, string.Empty, 38f, Palette.Ink, UiKit.Centred, true, FontStyles.Bold);
@@ -187,6 +200,14 @@ namespace SmallPot
             {
                 _host.StopCoroutine(_countUp);
                 _countUp = null;
+            }
+
+            // A punch rather than a jelly: this is a number going up, and one clean overshoot reads as the
+            // count landing. Relative, so it cannot leave the pill at a size it was not authored with, and
+            // skipped on the first set (previous < 0), which is a starting value rather than a change.
+            if (animate && previous >= 0 && current != previous)
+            {
+                Juice.Punch(_dropPill, 0.12f, 0.34f);
             }
 
             float duration = animate ? _motion.Duration(Configuration.NumberCountUpSeconds) : 0f;
@@ -321,6 +342,10 @@ namespace SmallPot
                 _host.StopCoroutine(_chipFlash);
             }
 
+            // The chip is about to say something new, so it gets the same single overshoot as the counter.
+            // Relative again, so the chip keeps whatever size the scene gave it.
+            Juice.Punch(_statusChip.transform, 0.16f, 0.4f);
+
             _chipFlash = _host.StartCoroutine(FlashRoutine(text, seconds));
         }
 
@@ -346,16 +371,47 @@ namespace SmallPot
         {
             _reportTitle.text = _strings.Display(title);
             _reportBody.text = _strings.Display(body);
+
+            // Guarded like the other panels: the entrance belongs to the showing that happened, not to a
+            // refresh of one that is already on screen.
+            bool wasVisible = ReportVisible;
+
             _reportCard.gameObject.SetActive(true);
-            _host.StartCoroutine(Tween.FadeCanvasGroup(_reportGroup, 0f, 1f, _motion.FadeDuration(0.18f)));
+
+            if (!wasVisible)
+            {
+                RevealAfterEntrance(_reportTitle);
+            }
         }
 
         public void HideReport()
         {
+            // Faded rather than switched off, and this is the Continue button's handler too: a hard cut is
+            // the last thing the player would see of the morning's report.
+            if (_reportJuice != null)
+            {
+                _reportJuice.Leave();
+                return;
+            }
+
             if (_reportCard != null)
             {
                 _reportCard.gameObject.SetActive(false);
             }
+        }
+
+        /// <summary>
+        /// Starts the report's headline reveal once the card has finished arriving.
+        ///
+        /// Unscaled, like every other entrance here: the report is read on the morning step, and a reveal
+        /// on scaled time would sit at zero characters if the game were paused.
+        /// </summary>
+        private static void RevealAfterEntrance(TMP_Text label)
+        {
+            DOTween.Sequence()
+                .SetUpdate(true)
+                .AppendInterval(RevealDelaySeconds)
+                .OnComplete(() => Juice.RevealText(label));
         }
 
         public bool ReportVisible => _reportCard != null && _reportCard.gameObject.activeSelf;

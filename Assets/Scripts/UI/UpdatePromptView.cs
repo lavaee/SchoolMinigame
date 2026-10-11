@@ -1,4 +1,5 @@
 using System;
+using DG.Tweening;
 using RTLTMPro;
 using TMPro;
 using UnityEngine;
@@ -24,10 +25,17 @@ namespace SmallPot
         /// <summary>Anchor for the panel itself.</summary>
         private static readonly Vector2 Middle = new Vector2(0.5f, 0.5f);
 
+        /// <summary>
+        /// How long the headline waits before it starts arriving: long enough for the card's own pop to
+        /// have settled, so the reveal reads as a second beat rather than as part of the same blur.
+        /// </summary>
+        private const float RevealDelaySeconds = 0.25f;
+
         private readonly StringsStore _strings;
         private readonly Action _onApply;
 
         private RectTransform _root;
+        private PanelJuice _rootJuice;
         private RTLTextMeshPro _title;
         private RTLTextMeshPro _body;
         private RTLTextMeshPro _detail;
@@ -81,6 +89,13 @@ namespace SmallPot
             UiKit.Place(apply.Rect, Top, new Vector2(0f, -348f), new Vector2(360f, 86f));
 
             Hide();
+
+            // Added after Hide, so both components wake on an inactive object: the card must not play an
+            // entrance during startup, when nothing is waiting. The root carries the scrim and so fades
+            // rather than being resized; the card on top of it pops.
+            _rootJuice = UiKit.GetOrAdd<PanelJuice>(_root.gameObject);
+            _rootJuice.Scale = false;
+            UiKit.GetOrAdd<PanelJuice>(panel.gameObject);
         }
 
         /// <summary>Shows the card and names the revision that is waiting.</summary>
@@ -100,18 +115,53 @@ namespace SmallPot
                     : string.Empty;
             }
 
+            // The card can be offered again after a later push, so the entrance belongs to the showing that
+            // actually happened rather than to every call.
+            bool wasVisible = Visible;
+
             _root.gameObject.SetActive(true);
 
             // Last child draws on top: the card belongs above the settings panel and above the HUD.
             _root.SetAsLastSibling();
+
+            if (!wasVisible)
+            {
+                RevealAfterEntrance(_title);
+            }
         }
 
         public void Hide()
         {
-            if (_root != null)
+            if (_root == null)
+            {
+                return;
+            }
+
+            // Faded rather than switched off in the same frame: the card was animated in, and the fade also
+            // holds the scrim over the paused game until the card has actually gone. The null branch is the
+            // call from Build, where there is no juice yet and an immediate hide is the correct answer.
+            if (_rootJuice != null)
+            {
+                _rootJuice.Leave();
+            }
+            else
             {
                 _root.gameObject.SetActive(false);
             }
+        }
+
+        /// <summary>
+        /// Starts the headline's reveal once the card has finished arriving.
+        ///
+        /// Unscaled, like everything else here: the card is shown while the game is paused, so a reveal on
+        /// scaled time would sit at zero characters until the player answered it.
+        /// </summary>
+        private static void RevealAfterEntrance(TMP_Text label)
+        {
+            DOTween.Sequence()
+                .SetUpdate(true)
+                .AppendInterval(RevealDelaySeconds)
+                .OnComplete(() => Juice.RevealText(label));
         }
 
         /// <summary>
@@ -128,8 +178,10 @@ namespace SmallPot
             if (widget != null)
             {
                 // In children, because a button keeps its label in a child rather than on itself.
+                // OriginalText, not text: text is the shaped result for RTL input, and re-assigning it
+                // elsewhere would shape it a second time and produce glyphs that no longer read as words.
                 RTLTextMeshPro label = widget.GetComponentInChildren<RTLTextMeshPro>(true);
-                existing = label != null ? label.text : null;
+                existing = label != null ? label.OriginalText : null;
             }
 
             if (_strings != null && _strings.Has(key))

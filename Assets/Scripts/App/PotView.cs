@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using DG.Tweening;
 using UnityEngine;
 
 namespace SmallPot
@@ -61,6 +62,21 @@ namespace SmallPot
         private bool _builtFlower;
         private Coroutine _routine;
 
+        /// <summary>
+        /// The plant root's authored scale, captured rather than assumed.
+        ///
+        /// The growth squash and the resting breath both animate this one value, so it is also the value
+        /// they have to be able to put back: a plant that grew a fraction of a percent every morning would
+        /// be a bug nobody notices until the tenth.
+        /// </summary>
+        private Vector3 _plantHome = Vector3.one;
+
+        /// <summary>The foliage container's authored rotation, for the same reason.</summary>
+        private Quaternion _foliageHome = Quaternion.identity;
+
+        /// <summary>Whether the plant is currently thriving, so the breath is started once, not every frame.</summary>
+        private bool _resting;
+
         public void Initialize(PotRig rig, Camera camera, MotionPrefs motion)
         {
             _rig = rig;
@@ -111,6 +127,11 @@ namespace SmallPot
             });
 
             _foliage = EnsureContainer(ref rig.FoliageRoot, _plant, "Foliage");
+
+            // Captured once, before anything animates them, so both can always be returned to where the
+            // scene's author put them.
+            _plantHome = _plant.localScale;
+            _foliageHome = _foliage != null ? _foliage.localRotation : Quaternion.identity;
 
             _waterBadge = EnsurePart(ref rig.WaterBadge, _plant, "Watered Badge", () => Badge(
                 "Watered Badge", TextureFactory.Droplet(), Palette.Water));
@@ -306,6 +327,14 @@ namespace SmallPot
 
             float ceiling = _rig.StemMaxHeight > 0.01f ? _rig.StemMaxHeight : FallbackMaxStemHeight;
             float target = Mathf.Max(MinimumStemHeight, visual.Height * ceiling);
+
+            // Read before they are overwritten: the beats below are all about a change, and a change cannot
+            // be recognised once the new value has already replaced the old one. "Was built" keeps the
+            // plant from squashing on the very first Apply, which is an appearance rather than growth.
+            bool wasBuilt = _builtLeafPairs >= 0;
+            bool wasDrooped = _droop;
+            bool grew = target > _height + 0.001f;
+
             _tilt = visual.LeafTiltDegrees + (visual.Droop ? DroopDegrees : 0f);
             _droop = visual.Droop;
 
@@ -336,6 +365,38 @@ namespace SmallPot
 
             ApplySoilColour(visual.SoilDryness);
             ApplyLeafColour();
+
+            // The beats, in the order they must not fight each other. All of them move transforms and none
+            // touches a material: the parts are meshes coloured through MeshFactory.Lit, and
+            // PotRig.ColorPlantParts owns those colours.
+            //
+            // The plant root's scale and the foliage container's rotation are the only two values Layout()
+            // does not rewrite every frame - the stem, the leaves and the badges are all repositioned there
+            // - so they are the only places movement can live without being overwritten.
+            if (_droop != wasDrooped)
+            {
+                SetDroop(_droop);
+            }
+
+            bool resting = !visual.Droop && (visual.LeafPairs > 0 || visual.Flower);
+            if (resting != _resting)
+            {
+                _resting = resting;
+                if (resting)
+                {
+                    StartBreathing();
+                }
+                else
+                {
+                    StopBreathing();
+                }
+            }
+
+            // Last, because the squash stops the breath and puts it back when it has settled.
+            if (animate && grew && wasBuilt)
+            {
+                SquashAndSettle();
+            }
 
             if (_waterBadge != null)
             {
@@ -392,6 +453,7 @@ namespace SmallPot
                 return;
             }
 
+            Splash();
             StartCoroutine(PourRoutine());
         }
 
@@ -654,6 +716,154 @@ namespace SmallPot
                     renderer.sharedMaterial = petalMaterial;
                 }
             }
+        }
+
+        /// <summary>
+        /// The growth beat: a squash, then a settle that overshoots and comes back.
+        ///
+        /// It drives the plant root's scale, which Layout() never writes - the stem carries the height in
+        /// its own scale - so growth cannot be overwritten by the next frame's layout pass.
+        /// </summary>
+        private void SquashAndSettle()
+        {
+            if (_plant == null)
+            {
+                return;
+            }
+
+            float motion = _motion != null ? _motion.Duration(0.42f) : 0.42f;
+            if (motion <= 0f)
+            {
+                return;
+            }
+
+            Juice.Stop(_plant);
+            _plant.localScale = _plantHome;
+
+            DOTween.Sequence()
+                .SetUpdate(true)
+                .SetId(_plant)
+                .Append(_plant.DOScale(
+                        new Vector3(_plantHome.x * 1.12f, _plantHome.y * 0.86f, _plantHome.z * 1.12f),
+                        motion * 0.30f)
+                    .SetEase(Ease.OutQuad))
+                .Append(_plant.DOScale(
+                        new Vector3(_plantHome.x * 0.97f, _plantHome.y * 1.06f, _plantHome.z * 0.97f),
+                        motion * 0.35f)
+                    .SetEase(Ease.InOutQuad))
+                .Append(_plant.DOScale(_plantHome, motion * 0.35f).SetEase(Ease.OutBack))
+                .OnComplete(() =>
+                {
+                    _plant.localScale = _plantHome;
+                    if (_resting)
+                    {
+                        StartBreathing();
+                    }
+                });
+        }
+
+        /// <summary>
+        /// The thirst droop: the foliage leans over, slowly, and stays there.
+        ///
+        /// A rotation of the foliage container rather than of the leaves, because Layout() rewrites every
+        /// leaf's rotation each frame and would overwrite it. Child rotations are relative, so leaning the
+        /// container tilts all of the leaves at once and leaves the per-leaf droop angle on top of it.
+        /// </summary>
+        private void SetDroop(bool drooping)
+        {
+            if (_foliage == null)
+            {
+                return;
+            }
+
+            float motion = _motion != null ? _motion.Duration(1.1f) : 1.1f;
+            Quaternion target = drooping
+                ? _foliageHome * Quaternion.Euler(DroopDegrees * 0.3f, 0f, 0f)
+                : _foliageHome;
+
+            Juice.Stop(_foliage);
+
+            if (motion <= 0f)
+            {
+                _foliage.localRotation = target;
+                return;
+            }
+
+            _foliage.DOLocalRotate(target.eulerAngles, motion)
+                .SetEase(Ease.OutCubic)
+                .SetUpdate(true)
+                .SetId(_foliage);
+        }
+
+        /// <summary>
+        /// A slow breath for a plant that is thriving: movement without asking for attention.
+        ///
+        /// The plant root again, and started only when the thriving state actually changes rather than on
+        /// every Apply, because a breath restarted every refresh would stutter instead of breathe.
+        /// </summary>
+        private void StartBreathing()
+        {
+            if (_plant == null)
+            {
+                return;
+            }
+
+            float motion = _motion != null ? _motion.Duration(2.2f) : 2.2f;
+
+            Juice.Stop(_plant);
+            _plant.localScale = _plantHome;
+
+            if (motion <= 0f)
+            {
+                return;
+            }
+
+            _plant.DOScale(_plantHome * 1.02f, motion)
+                .SetEase(Ease.InOutSine)
+                .SetLoops(-1, LoopType.Yoyo)
+                .SetUpdate(true)
+                .SetId(_plant);
+        }
+
+        private void StopBreathing()
+        {
+            if (_plant == null)
+            {
+                return;
+            }
+
+            Juice.Stop(_plant);
+            _plant.localScale = _plantHome;
+        }
+
+        /// <summary>The watering punch: one quick overshoot, then the breath comes back.</summary>
+        private void Splash()
+        {
+            if (_plant == null)
+            {
+                return;
+            }
+
+            float motion = _motion != null ? _motion.Duration(0.34f) : 0.34f;
+            if (motion <= 0f)
+            {
+                return;
+            }
+
+            Juice.Stop(_plant);
+            _plant.localScale = _plantHome;
+
+            _plant.DOPunchScale(Vector3.one * 0.14f, motion, 8, 0.9f)
+                .SetUpdate(true)
+                .SetId(_plant)
+                .OnComplete(() =>
+                {
+                    _plant.localScale = _plantHome;
+                    if (_resting)
+                    {
+                        StartBreathing();
+                    }
+                });
         }
 
         public float CurrentHeight => _height;

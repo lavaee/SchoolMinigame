@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DG.Tweening;
 using RTLTMPro;
 using TMPro;
 using UnityEngine;
@@ -25,10 +26,17 @@ namespace SmallPot
         /// <summary>Anchor for the panel itself.</summary>
         private static readonly Vector2 Middle = new Vector2(0.5f, 0.5f);
 
+        /// <summary>
+        /// How long the headline waits before it starts arriving: long enough for the panel's own pop to
+        /// have settled, so the reveal reads as a second beat rather than as part of the same blur.
+        /// </summary>
+        private const float RevealDelaySeconds = 0.25f;
+
         private readonly StringsStore _strings;
         private readonly Action<string> _onRetry;
 
         private RectTransform _root;
+        private PanelJuice _rootJuice;
         private RTLTextMeshPro _title;
         private RTLTextMeshPro _body;
         private RTLTextMeshPro _tried;
@@ -105,6 +113,13 @@ namespace SmallPot
             UiKit.Place(hint.rectTransform, Top, new Vector2(0f, -602f), new Vector2(580f, 96f));
 
             Hide();
+
+            // Added after Hide, so both components wake on an inactive object: the gate must not play an
+            // entrance during startup, before anything has gone wrong. The root carries the scrim and so
+            // fades rather than being resized; the panel on top of it pops.
+            _rootJuice = UiKit.GetOrAdd<PanelJuice>(_root.gameObject);
+            _rootJuice.Scale = false;
+            UiKit.GetOrAdd<PanelJuice>(panel.gameObject);
         }
 
         /// <summary>Shows the gate and states which addresses were just tried.</summary>
@@ -120,18 +135,54 @@ namespace SmallPot
                 _tried.text = tried != null && tried.Count > 0 ? string.Join("\n", tried) : string.Empty;
             }
 
+            // The gate is shown again on every retry while the server stays away, so the entrance and the
+            // reveal belong to the first showing only: a headline that re-reveals every few seconds is a
+            // stutter, and it would draw the eye to the one thing the player cannot fix by watching it.
+            bool wasVisible = Visible;
+
             _root.gameObject.SetActive(true);
 
             // Last child draws on top, so the gate covers the HUD no matter what order things were built.
             _root.SetAsLastSibling();
+
+            if (!wasVisible)
+            {
+                RevealAfterEntrance(_title);
+            }
         }
 
         public void Hide()
         {
-            if (_root != null)
+            if (_root == null)
+            {
+                return;
+            }
+
+            // Faded rather than switched off in the same frame: the gate was animated in, and the fade also
+            // keeps it covering the game for the moment it takes to leave. The null branch is the call from
+            // Build, where there is no juice yet and an immediate hide is the correct answer.
+            if (_rootJuice != null)
+            {
+                _rootJuice.Leave();
+            }
+            else
             {
                 _root.gameObject.SetActive(false);
             }
+        }
+
+        /// <summary>
+        /// Starts the headline's reveal once the panel has finished arriving.
+        ///
+        /// Unscaled, and this is the panel where that matters most: the gate is shown while the game is
+        /// paused, so a reveal on scaled time would never begin at all.
+        /// </summary>
+        private static void RevealAfterEntrance(TMP_Text label)
+        {
+            DOTween.Sequence()
+                .SetUpdate(true)
+                .AppendInterval(RevealDelaySeconds)
+                .OnComplete(() => Juice.RevealText(label));
         }
 
         /// <summary>The address in the field, or empty when the player has not touched it.</summary>
@@ -183,8 +234,10 @@ namespace SmallPot
             if (widget != null)
             {
                 // In children, because a button keeps its label in a child rather than on itself.
+                // OriginalText, not text: text is the shaped result for RTL input, and re-assigning it
+                // elsewhere would shape it a second time and produce glyphs that no longer read as words.
                 RTLTextMeshPro label = widget.GetComponentInChildren<RTLTextMeshPro>(true);
-                existing = label != null ? label.text : null;
+                existing = label != null ? label.OriginalText : null;
             }
 
             if (_strings != null && _strings.Has(key))

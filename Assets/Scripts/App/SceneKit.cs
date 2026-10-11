@@ -13,6 +13,43 @@ namespace SmallPot
     /// </summary>
     public static class Palette
     {
+        /// <summary>
+        /// A colour from data, or the game's own when the key is absent or unreadable.
+        ///
+        /// "none" is honoured as plain white, which for an icon means "leave the artwork's own colours
+        /// alone" - the answer somebody wants after replacing a sprite and finding it tinted green.
+        /// </summary>
+        public static Color Colour(string text, Color fallback)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return fallback;
+            }
+
+            string trimmed = text.Trim();
+            if (string.Equals(trimmed, "none", System.StringComparison.OrdinalIgnoreCase))
+            {
+                return Color.white;
+            }
+
+            return ColorUtility.TryParseHtmlString(trimmed, out Color parsed) ? parsed : fallback;
+        }
+
+        /// <summary>
+        /// The tint for an icon. With nothing in the data the answer depends on the art: a generated icon
+        /// is a white silhouette that needs a tint to become an icon, while a replaced one carries its own
+        /// colours and tinting it is how somebody's artwork ends up the wrong colour.
+        /// </summary>
+        public static Color Tint(string text, bool artIsAuthored, Color fallback)
+        {
+            if (!string.IsNullOrEmpty(text))
+            {
+                return Colour(text, fallback);
+            }
+
+            return artIsAuthored ? Color.white : fallback;
+        }
+
         public static readonly Color Room = new Color32(0xE9, 0xDA, 0xC2, 0xFF);
         public static readonly Color Wall = new Color32(0xF6, 0xEC, 0xDA, 0xFF);
         public static readonly Color WallShade = new Color32(0xE4, 0xD6, 0xBE, 0xFF);

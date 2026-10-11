@@ -15,5 +15,21 @@
     "duckLevel": 0.35,
     "duckSeconds": 0.35,
     "logPlays": true
+  },
+  "ui": {
+    "answerCorrectBackground": "",
+    "answerCorrectLabel": "",
+    "answerWrongBackground": "",
+    "answerWrongLabel": "",
+    "answerRevealBackground": "",
+    "answerRevealLabel": "",
+    "correctIcon": "check-128",
+    "correctTint": "",
+    "wrongIcon": "cross-128",
+    "wrongTint": "",
+    "rewardMetIcon": "droplet-128",
+    "rewardMetTint": "",
+    "rewardMissedIcon": "leaf-128",
+    "rewardMissedTint": ""
   }
 }

@@ -457,6 +457,76 @@ namespace SmallPot
         /// </summary>
         public AudioSettings Audio = new AudioSettings();
 
+        /// <summary>
+        /// The interface's colours and icons, also from data/dev.json.
+        ///
+        /// They live here rather than in the supplied config.json, which a test pins byte for byte because
+        /// it is the employer's file. Every value is a string and an absent one means "keep the colour the
+        /// game already uses", so adding a key is the only way to change anything - and removing it again
+        /// puts things back.
+        /// </summary>
+        public UiSettings Ui = new UiSettings();
+
+        [Serializable]
+        public sealed class UiSettings
+        {
+            /// <summary>Used when nothing has been read yet, so a view never has to check for null.</summary>
+            public static readonly UiSettings Default = new UiSettings();
+
+            public string AnswerCorrectBackground = string.Empty;
+            public string AnswerCorrectLabel = string.Empty;
+            public string AnswerWrongBackground = string.Empty;
+            public string AnswerWrongLabel = string.Empty;
+            public string AnswerRevealBackground = string.Empty;
+            public string AnswerRevealLabel = string.Empty;
+
+            public string CorrectIcon = "check-128";
+            public string CorrectTint = string.Empty;
+            public string WrongIcon = "cross-128";
+            public string WrongTint = string.Empty;
+            public string RewardMetIcon = "droplet-128";
+            public string RewardMetTint = string.Empty;
+            public string RewardMissedIcon = "leaf-128";
+            public string RewardMissedTint = string.Empty;
+
+            public static UiSettings FromJson(JsonValue node)
+            {
+                var ui = new UiSettings();
+                if (node == null || !node.IsObject)
+                {
+                    return ui;
+                }
+
+                ui.AnswerCorrectBackground = Text(node, "answerCorrectBackground", ui.AnswerCorrectBackground);
+                ui.AnswerCorrectLabel = Text(node, "answerCorrectLabel", ui.AnswerCorrectLabel);
+                ui.AnswerWrongBackground = Text(node, "answerWrongBackground", ui.AnswerWrongBackground);
+                ui.AnswerWrongLabel = Text(node, "answerWrongLabel", ui.AnswerWrongLabel);
+                ui.AnswerRevealBackground = Text(node, "answerRevealBackground", ui.AnswerRevealBackground);
+                ui.AnswerRevealLabel = Text(node, "answerRevealLabel", ui.AnswerRevealLabel);
+                ui.CorrectIcon = Text(node, "correctIcon", ui.CorrectIcon);
+                ui.CorrectTint = Text(node, "correctTint", ui.CorrectTint);
+                ui.WrongIcon = Text(node, "wrongIcon", ui.WrongIcon);
+                ui.WrongTint = Text(node, "wrongTint", ui.WrongTint);
+                ui.RewardMetIcon = Text(node, "rewardMetIcon", ui.RewardMetIcon);
+                ui.RewardMetTint = Text(node, "rewardMetTint", ui.RewardMetTint);
+                ui.RewardMissedIcon = Text(node, "rewardMissedIcon", ui.RewardMissedIcon);
+                ui.RewardMissedTint = Text(node, "rewardMissedTint", ui.RewardMissedTint);
+
+                return ui;
+            }
+
+            private static string Text(JsonValue node, string key, string fallback)
+            {
+                if (!node.Has(key))
+                {
+                    return fallback;
+                }
+
+                string value = node[key].AsString(fallback);
+                return value == null ? fallback : value.Trim();
+            }
+        }
+
         /// <summary>Volumes, variation and the ambience crossfade. Every value is clamped on the way in.</summary>
         [Serializable]
         public sealed class AudioSettings
@@ -506,9 +576,18 @@ namespace SmallPot
                 value < low ? low : (value > high ? high : value);
         }
 
+        /// <summary>
+        /// The settings last read from data/dev.json.
+        ///
+        /// Static because the interface needs them long after the loader has finished with them: a view is
+        /// handed a configuration built from the supplied config.json, and these live in our own file.
+        /// </summary>
+        public static DevSettings Current { get; private set; }
+
         public static DevSettings FromJson(JsonValue root)
         {
             var settings = new DevSettings();
+            Current = settings;
             if (root == null || !root.IsObject)
             {
                 return settings;
@@ -564,6 +643,9 @@ namespace SmallPot
                     settings.UpdateWatchHoldSeconds = seconds;
                 }
             }
+
+            settings.Audio = AudioSettings.FromJson(root["audio"]);
+            settings.Ui = UiSettings.FromJson(root["ui"]);
 
             return settings;
         }
