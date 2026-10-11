@@ -260,7 +260,11 @@ namespace SmallPot
             _waterLabel.fontSize = 36f;
             _waterButton.Background.color = block == WaterBlock.Allowed ? Palette.Accent : Palette.Disabled;
             _waterLabel.color = Color.white;
-            _waterButton.SetInteractable(block == WaterBlock.Allowed);
+            // NotEnoughDrops stays pressable even though it looks disabled, because the tap is how the
+            // player finds out why; the controller answers it with the notice and its sound. A button that
+            // silently does nothing is exactly the complaint this fixes. The other refusals already say
+            // their piece on the cost label, so they can stay inert.
+            _waterButton.SetInteractable(block == WaterBlock.Allowed || block == WaterBlock.NotEnoughDrops);
 
             if (block == WaterBlock.NotEnoughDrops && _strings.Has("water.not_enough"))
             {
