@@ -36,6 +36,8 @@
     "game.time_up": "زمان تمام شد.",
     "game.no_content": "فعلاً واژه‌ای برای بازی نیست.",
     "water.not_needed": "گلدان کامل شکفته است.",
+    "water.no_drops": "قطره‌ی کافی نداری. اول کمی آب جمع کن، بعد بیا آبش بده.",
+    "water.no_drops_hint": "با بازی کردن چند قطره به دست می‌آوری.",
     "report.recovered": "گلدان دوباره سرحال شد و به رشدش ادامه می‌دهد.",
     "debug.title": "اشکال‌زدایی",
     "debug.reset_save": "شروع دوباره",
@@ -43,6 +45,6 @@
     "debug.missing_keys": "کلیدهای جاافتاده",
     "debug.missing_keys_none": "همه‌ی کلیدها پیدا شد.",
     "credits.title": "منابع",
-    "credits.line": "قلم وزیرمتن با مجوز OFL 1.1 · RTLTMPro با مجوز MIT"
+    "credits.line": "قلم لاله‌زار با مجوز OFL 1.1 · RTLTMPro با مجوز MIT"
   }
 }

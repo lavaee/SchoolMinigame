@@ -292,6 +292,87 @@ The cost is honest to name: the app is no longer playable with no server at all,
 server is not an error" is now a switch rather than a property. The switch is in a data file the admin page
 serves, so it can be flipped live, which is the closest thing to having both.
 
+## Why is a sound found by its file name instead of being wired up?
+
+Because the alternative makes adding a sound a code change. `AudioLibrary` maps each moment — a click, a
+correct answer, a level up — to a file name, and the file is loaded from `Assets/Resources/Audio/FX` under
+that name. Dropping `No Water.mp3` into the folder is the whole installation, which is what the person
+supplying the audio actually wants to do. A missing file is silence rather than an error, so the game is
+playable with no audio at all and stays playable when one is removed. A clip assigned to a slot on
+`AudioDirector` still wins, so the scene keeps the last word — the same defer-to-the-author rule as the
+interface.
+
+Two details are deliberate rather than incidental. The four **"Select flowerpot" takes** are chosen at
+random on every answer press and never repeat the one just used, because one file on every press is audibly
+a machine. And the effects play through a **pool of sources** rather than one, because `PlayOneShot` reads
+the source's pitch at the moment it is called: with a single source, every new sound retunes whatever is
+still ringing. The levels themselves are in the `audio` block of `data/dev.json`, for the same reason as
+everything else tunable — they are worth adjusting while listening, not by rebuilding.
+
+## How do you change how the interface moves?
+
+Through the `juice` block of `data/dev.json`: how long a panel takes to arrive and how small it starts, how
+far a button squashes under a finger, how far it overshoots on release, the strength of the punch and the
+jelly, and the timing of the text reveal. These are numbers you can only judge by watching, and the file is
+read at runtime and can be pushed into a running build from the admin page, so a change is felt on the next
+tap rather than at the next launch. The defaults live in `Assets/Scripts/UI/Juice.cs`, and an absent key
+keeps its default.
+
+**Animation curves are deliberately not in there.** A curve is a shape you draw, and drawing a shape in
+JSON is misery. The day/night cycle keeps its curves as Inspector fields, where they can be dragged.
+
+## Why does the sun move when you go to the next morning?
+
+Because the morning is the game's whole rhythm — nothing grows except at one — and a transition that
+happens instantly is easy to miss. A sunrise gives it a beginning and an end, and it is the one moment
+allowed to take its time.
+
+`DurationSeconds`, `Degrees`, `StartIntensity` and `PeakIntensity` come from the `dayNight` block of
+`data/dev.json`. The two `AnimationCurve`s — how the intensity rises, how the rotation progresses — are
+Inspector fields, because that is where a curve belongs and because the component is meant to be dropped on
+`Sun Light` and shaped by hand. It prefers a component it finds there and only creates one at runtime when
+there is none, so hand-shaped curves are never overridden by the code's defaults. It finds the sun through
+`RenderSettings.sun`, then a directional light named "sun", then any directional light, and logs which one
+it used.
+
+Three smaller decisions: it runs on **unscaled** time, so it still plays if something has paused the game;
+it **honours reduce-motion**, arriving at its final state immediately rather than not moving at all, which
+is this project's rule for every animation; and calling it twice is safe, because the second call kills the
+first without completing it and leaves the light where it got to rather than snapping it back.
+
+## Why does the clock stop after a question?
+
+Because the answer arriving and the next question arriving were the same instant, and the player never got
+to see what they had done. `feedbackPauseSeconds` in `data/dev.json` — one second by default — holds the
+result on screen with the shared clock stopped. The clock is checked where it already stops for the
+connection gate, and the pause is cleared even when a round set is cancelled or times out, so a paused
+session cannot get stuck.
+
+It is in `dev.json` and not in the supplied `config.json`, which already holds feedback timings, because
+that file is hash-pinned by a test — a new setting there would mean editing the challenge's own file. The
+supplied timings are kept and the pause is added on top, so none of the original pacing was taken away.
+
+## Why is the font loaded from Resources when the scene already names one?
+
+Because the scene names a font, and that reference is the problem: pointing it at Lalezar means editing
+`Main.unity`, which is hand-authored now and not something a script should be rewriting. So the generated
+Lalezar asset lives under `Assets/Resources/Fonts/` and `GameBootstrap` loads it by name, logging one line
+saying which font won. Lalezar is used when the scene's reference is empty or still points at the old
+Persian font; a font assigned on purpose is left alone.
+
+The sweep over scene-authored labels is needed because the widget builders skip font assignment on anything
+already in the scene, so without it every hand-laid-out label would keep drawing in the old face. It sets
+`.font` and never `.text`: assigning text re-runs Persian shaping, which is exactly the mistake that
+produced mojibake before.
+
+Two consequences are worth stating plainly. The Lalezar atlas is built by
+`Window/SmallPot/Regenerate Font Assets Only`, never by `Generate Project`, which would re-bake the scene
+along with it. And **Lalezar lacks 36 of the isolated presentation forms** — the ones a standalone
+single-letter word needs. Connected text only ever uses the initial, medial and final forms, so ordinary
+words are unaffected. Two characters in the supplied data are affected and fall back to Amiri, which is
+kept as the glyph fallback precisely because it has the fullest coverage of the three fonts in the project.
+The mismatch is visible on those two characters, and it cannot be fixed from this side of the font.
+
 ## What did you deliberately not build?
 
 Accounts, cloud saves, leaderboards and any server-side game state. The server exists for one reason: to

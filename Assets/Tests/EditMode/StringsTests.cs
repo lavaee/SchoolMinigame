@@ -70,7 +70,9 @@ namespace SmallPot.Tests
             "update.title",
             "update.body",
             "update.detail",
-            "update.apply"
+            "update.apply",
+            "water.no_drops",
+            "water.no_drops_hint"
         };
 
         [Test]

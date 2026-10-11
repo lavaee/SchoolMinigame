@@ -13,6 +13,8 @@ namespace SmallPot
         Reward,
         Water,
         Growth,
+        LevelUp,
+        NoWater,
         Encourage,
         Morning,
         Thirst,
@@ -42,8 +44,8 @@ namespace SmallPot
         private static readonly Sound[] AllSounds =
         {
             Sound.Click, Sound.Select, Sound.Correct, Sound.Wrong, Sound.Reward, Sound.Water,
-            Sound.Growth, Sound.Encourage, Sound.Morning, Sound.Thirst, Sound.ConnectionLost,
-            Sound.ConnectionUp
+            Sound.Growth, Sound.LevelUp, Sound.NoWater, Sound.Encourage, Sound.Morning, Sound.Thirst,
+            Sound.ConnectionLost, Sound.ConnectionUp
         };
 
         [Header("Output")]
@@ -86,11 +88,63 @@ namespace SmallPot
         private readonly Dictionary<Sound, AudioClip> _resolved = new Dictionary<Sound, AudioClip>();
         private int _nextVoice;
         private int _lastVariation = -1;
+        private DevSettings _appliedSettings;
+        private bool _loggedSettings;
 
         private void Awake()
         {
             Instance = this;
             BuildVoices();
+        }
+
+        private void Start()
+        {
+            ApplyAudioSettings();
+        }
+
+        private void Update()
+        {
+            // Our own values can be replaced while the game is running, because a new revision can be pulled
+            // from the server at any moment. A reference comparison is the whole test for that: it allocates
+            // nothing and looks for nothing in the scene, so checking it every frame costs almost nothing.
+            if (!ReferenceEquals(_appliedSettings, DevSettings.Current))
+            {
+                ApplyAudioSettings();
+            }
+        }
+
+        /// <summary>
+        /// Pushes the volumes and the feel from our own data onto this component.
+        ///
+        /// Called once at startup and again whenever the settings object is replaced. Until the data has been
+        /// read there is nothing to apply, and the values serialised in the scene stand - which is also what
+        /// happens if this component is dropped into a scene with no data loader at all.
+        /// </summary>
+        public void ApplyAudioSettings()
+        {
+            DevSettings settings = DevSettings.Current;
+            _appliedSettings = settings;
+
+            if (settings == null || settings.Audio == null)
+            {
+                return;
+            }
+
+            var audio = settings.Audio;
+            Volume = audio.SfxVolume;
+            MusicVolume = audio.MusicVolume;
+            PitchVariation = audio.PitchVariation;
+            RepeatWindowSeconds = audio.RepeatWindowSeconds;
+            LogPlays = audio.LogPlays;
+
+            // Once, not on every reload: this is a note about what was applied, not a running commentary,
+            // and a line per revision would bury the per-sound lines that are the point of LogPlays.
+            if (audio.LogPlays && !_loggedSettings)
+            {
+                _loggedSettings = true;
+                Debug.Log($"[SmallPot] audio sfx {Volume:0.00} music {MusicVolume:0.00} " +
+                          $"pitch +/-{PitchVariation:0.00} repeat {RepeatWindowSeconds:0.00}s");
+            }
         }
 
         private void OnDestroy()
@@ -146,10 +200,13 @@ namespace SmallPot
                 return assigned;
             }
 
-            // if (sound == Sound.Select)
-            // {
-            //     return NextVariation();
-            // }
+            // The four "Select flowerpot" takes are chosen at random rather than by name, so this one moment
+            // is resolved here instead of through the table. Pressing an answer should not sound like a
+            // machine repeating itself, and a fixed file name could not express that.
+            if (sound == Sound.Select)
+            {
+                return NextVariation();
+            }
 
             AudioClip cached;
             if (_resolved.TryGetValue(sound, out cached))

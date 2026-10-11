@@ -37,6 +37,43 @@ namespace SmallPot
         /// </summary>
         public static MotionPrefs Prefs;
 
+        /// <summary>
+        /// The shapes of the animations, in one place.
+        ///
+        /// These defaults are what the game ships with. Every one of them can be overridden from the `juice`
+        /// block in data/dev.json, which is applied by Apply below as soon as the settings are read - so the
+        /// feel can be retuned on a running game from the admin page instead of by editing and rebuilding.
+        /// The helpers take a negative argument to mean "use whatever the data says", because a C# default
+        /// parameter has to be a compile-time constant and so cannot read a field.
+        /// </summary>
+        public static float PanelSeconds = 0.36f;
+
+        public static float PanelFrom = 0.88f;
+        public static float ButtonPressedScale = 0.95f;
+        public static float ButtonReleaseOvershoot = 0.035f;
+        public static float RevealSeconds = 0.4f;
+        public static float RevealDelaySeconds = 0.25f;
+        public static float PunchStrength = 0.18f;
+        public static float JellyStrength = 0.05f;
+
+        /// <summary>Takes the shapes from data. Anything absent keeps its default above.</summary>
+        public static void Apply(DevSettings.JuiceSettings settings)
+        {
+            if (settings == null)
+            {
+                return;
+            }
+
+            PanelSeconds = settings.PanelSeconds;
+            PanelFrom = settings.PanelFrom;
+            ButtonPressedScale = settings.ButtonPressedScale;
+            ButtonReleaseOvershoot = settings.ButtonReleaseOvershoot;
+            RevealSeconds = settings.RevealSeconds;
+            RevealDelaySeconds = settings.RevealDelaySeconds;
+            PunchStrength = settings.PunchStrength;
+            JellyStrength = settings.JellyStrength;
+        }
+
         private const float FadeSeconds = 0.18f;
 
         /// <summary>Stops everything this helper has running on a target, before it is animated again.</summary>
@@ -56,7 +93,7 @@ namespace SmallPot
         /// The overshoot is what makes it read as arriving rather than appearing, and it is deliberately
         /// small - a panel that bounces is a panel that looks unsteady.
         /// </summary>
-        public static void PopIn(RectTransform rect, CanvasGroup group, float seconds = 0.36f, float from = 0.88f,
+        public static void PopIn(RectTransform rect, CanvasGroup group, float seconds = -1f, float from = -1f,
             Vector3 home = default)
         {
             if (rect == null)
@@ -68,6 +105,16 @@ namespace SmallPot
             if (home == Vector3.zero)
             {
                 home = Vector3.one;
+            }
+
+            if (seconds < 0f)
+            {
+                seconds = PanelSeconds;
+            }
+
+            if (from <= 0f)
+            {
+                from = PanelFrom;
             }
 
             MotionPrefs motion = Prefs;
@@ -185,11 +232,16 @@ namespace SmallPot
         /// authored at something other than 1 keeps its size, because a punch oscillates around whatever
         /// it finds and ends there. An absolute jelly would quietly flatten it to 1 on the first tap.
         /// </summary>
-        public static void Jelly(RectTransform rect, float strength = 0.05f, float seconds = 0.6f)
+        public static void Jelly(RectTransform rect, float strength = -1f, float seconds = 0.6f)
         {
             if (rect == null)
             {
                 return;
+            }
+
+            if (strength < 0f)
+            {
+                strength = JellyStrength;
             }
 
             MotionPrefs motion = Prefs;
@@ -204,11 +256,16 @@ namespace SmallPot
         }
 
         /// <summary>One clean overshoot, for a number that just went up.</summary>
-        public static void Punch(Transform target, float strength = 0.18f, float seconds = 0.4f)
+        public static void Punch(Transform target, float strength = -1f, float seconds = 0.4f)
         {
             if (target == null)
             {
                 return;
+            }
+
+            if (strength < 0f)
+            {
+                strength = PunchStrength;
             }
 
             MotionPrefs motion = Prefs;
@@ -262,11 +319,16 @@ namespace SmallPot
         }
 
         /// <summary>The release: back past its own size, then settled.</summary>
-        public static void Release(RectTransform rect, Vector3 home, float overshoot = 0.035f)
+        public static void Release(RectTransform rect, Vector3 home, float overshoot = -1f)
         {
             if (rect == null)
             {
                 return;
+            }
+
+            if (overshoot < 0f)
+            {
+                overshoot = ButtonReleaseOvershoot;
             }
 
             MotionPrefs motion = Prefs;
@@ -458,11 +520,11 @@ namespace SmallPot
         [Tooltip("Off for a full-screen scrim: a scrim should fade, not pop.")]
         public bool Scale = true;
 
-        [Tooltip("Seconds the entrance takes.")]
-        public float Seconds = 0.36f;
+        [Tooltip("Seconds the entrance takes. Zero uses the value from data/dev.json.")]
+        public float Seconds;
 
-        [Tooltip("Where the scale starts, as a fraction of the authored size.")]
-        public float From = 0.88f;
+        [Tooltip("Where the scale starts, as a fraction of the authored size. Zero uses data/dev.json.")]
+        public float From;
 
         private RectTransform _rect;
         private CanvasGroup _group;
@@ -539,8 +601,8 @@ namespace SmallPot
     [DisallowMultipleComponent]
     public sealed class ButtonJuice : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
     {
-        [Range(0.8f, 1f)]
-        public float PressedScale = 0.95f;
+        [Tooltip("How far it squashes while held. Zero uses the value from data/dev.json.")]
+        public float PressedScale;
 
         private RectTransform _rect;
         private Vector3 _home;
@@ -555,7 +617,8 @@ namespace SmallPot
         public void OnPointerDown(PointerEventData eventData)
         {
             _held = true;
-            Juice.Press(_rect, _home, PressedScale);
+            float scale = PressedScale > 0f ? PressedScale : Juice.ButtonPressedScale;
+            Juice.Press(_rect, _home, scale);
         }
 
         public void OnPointerUp(PointerEventData eventData)

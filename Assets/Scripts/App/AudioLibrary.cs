@@ -43,6 +43,8 @@ namespace SmallPot
             { Sound.Reward, "Finish test" },
             { Sound.Water, "Watering the planet" },
             { Sound.Growth, "Blob" },
+            { Sound.LevelUp, "Level Up" },
+            { Sound.NoWater, "No Water" },
             { Sound.Encourage, "Cat" },
 
             // The four moments with no file of their own borrow the nearest one, detuned and quietened so

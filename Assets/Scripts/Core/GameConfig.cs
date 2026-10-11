@@ -467,6 +467,90 @@ namespace SmallPot
         /// </summary>
         public UiSettings Ui = new UiSettings();
 
+        /// <summary>
+        /// The shapes of the animations, from data/dev.json.
+        ///
+        /// Same reasoning as the audio: these are the numbers worth adjusting while watching the game run,
+        /// and this file can be pushed into a live build, so the feel can be retuned without a rebuild.
+        /// The AnimationCurve fields on the day/night component are deliberately not here - a curve belongs
+        /// in the Inspector, where it can be shaped by hand.
+        /// </summary>
+        public JuiceSettings Juice = new JuiceSettings();
+
+        /// <summary>How the morning transition moves the sun. Durations and angles only; curves stay in code.</summary>
+        public DayNightSettings DayNight = new DayNightSettings();
+
+        /// <summary>
+        /// How long the result of an answer stays on screen before the next question, with the shared clock
+        /// stopped. This belongs here rather than in the supplied config.json, which is hash-pinned and
+        /// cannot be touched; the supplied feedback holds still apply on top of it.
+        /// </summary>
+        public float FeedbackPauseSeconds = 1f;
+
+        [Serializable]
+        public sealed class JuiceSettings
+        {
+            public float PanelSeconds = 0.36f;
+            public float PanelFrom = 0.88f;
+            public float ButtonPressedScale = 0.95f;
+            public float ButtonReleaseOvershoot = 0.035f;
+            public float RevealSeconds = 0.4f;
+            public float RevealDelaySeconds = 0.25f;
+            public float PunchStrength = 0.18f;
+            public float JellyStrength = 0.05f;
+
+            public static JuiceSettings FromJson(JsonValue node)
+            {
+                var juice = new JuiceSettings();
+                if (node == null || !node.IsObject)
+                {
+                    return juice;
+                }
+
+                var ignored = new List<string>();
+                juice.PanelSeconds = Range(GameConfig.ReadFloat(node, "panelSeconds", juice.PanelSeconds, ignored), 0f, 3f);
+                juice.PanelFrom = Range(GameConfig.ReadFloat(node, "panelFrom", juice.PanelFrom, ignored), 0.1f, 1.5f);
+                juice.ButtonPressedScale = Range(GameConfig.ReadFloat(node, "buttonPressedScale", juice.ButtonPressedScale, ignored), 0.5f, 1f);
+                juice.ButtonReleaseOvershoot = Range(GameConfig.ReadFloat(node, "buttonReleaseOvershoot", juice.ButtonReleaseOvershoot, ignored), 0f, 0.5f);
+                juice.RevealSeconds = Range(GameConfig.ReadFloat(node, "revealSeconds", juice.RevealSeconds, ignored), 0f, 5f);
+                juice.RevealDelaySeconds = Range(GameConfig.ReadFloat(node, "revealDelaySeconds", juice.RevealDelaySeconds, ignored), 0f, 5f);
+                juice.PunchStrength = Range(GameConfig.ReadFloat(node, "punchStrength", juice.PunchStrength, ignored), 0f, 1f);
+                juice.JellyStrength = Range(GameConfig.ReadFloat(node, "jellyStrength", juice.JellyStrength, ignored), 0f, 0.5f);
+                return juice;
+            }
+
+            private static float Range(float value, float low, float high) =>
+                value < low ? low : (value > high ? high : value);
+        }
+
+        [Serializable]
+        public sealed class DayNightSettings
+        {
+            public float DurationSeconds = 3f;
+            public float Degrees = 360f;
+            public float PeakIntensity = 1.15f;
+            public float StartIntensity = 0.55f;
+
+            public static DayNightSettings FromJson(JsonValue node)
+            {
+                var dayNight = new DayNightSettings();
+                if (node == null || !node.IsObject)
+                {
+                    return dayNight;
+                }
+
+                var ignored = new List<string>();
+                dayNight.DurationSeconds = Range(GameConfig.ReadFloat(node, "durationSeconds", dayNight.DurationSeconds, ignored), 0.2f, 30f);
+                dayNight.Degrees = Range(GameConfig.ReadFloat(node, "degrees", dayNight.Degrees, ignored), 0f, 720f);
+                dayNight.PeakIntensity = Range(GameConfig.ReadFloat(node, "peakIntensity", dayNight.PeakIntensity, ignored), 0f, 8f);
+                dayNight.StartIntensity = Range(GameConfig.ReadFloat(node, "startIntensity", dayNight.StartIntensity, ignored), 0f, 8f);
+                return dayNight;
+            }
+
+            private static float Range(float value, float low, float high) =>
+                value < low ? low : (value > high ? high : value);
+        }
+
         [Serializable]
         public sealed class UiSettings
         {
@@ -646,6 +730,17 @@ namespace SmallPot
 
             settings.Audio = AudioSettings.FromJson(root["audio"]);
             settings.Ui = UiSettings.FromJson(root["ui"]);
+            settings.Juice = JuiceSettings.FromJson(root["juice"]);
+            settings.DayNight = DayNightSettings.FromJson(root["dayNight"]);
+
+            float pause = GameConfig.ReadFloat(root, "feedbackPauseSeconds", settings.FeedbackPauseSeconds, new List<string>());
+            settings.FeedbackPauseSeconds = pause < 0f ? 0f : (pause > 10f ? 10f : pause);
+
+            // Published straight to the animation helpers, so a pushed change to the feel of the interface
+            // takes effect on the next tap rather than at the next launch.
+            // Fully qualified on purpose: the Juice field on this class shadows the Juice type, so a bare
+            // Juice.Apply here binds to the field and the compiler rightly refuses it.
+            SmallPot.Juice.Apply(settings.Juice);
 
             return settings;
         }

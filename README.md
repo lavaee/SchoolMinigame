@@ -78,9 +78,10 @@ the bundled data becomes the floor again, with the status chip reporting where t
   -projectPath . -testPlatform EditMode -testResults Logs\tests-editmode.xml
 ```
 
-84 EditMode tests cover the JSON reader, the string fallback chain, Persian number formatting, the whole
-morning transition matrix, the pair game's round building, and the byte identity of the supplied data
-files. They also fail the build if any Persian text is hard-coded in a script.
+94 EditMode tests cover the JSON reader, the string fallback chain, Persian number formatting, the whole
+morning transition matrix, the pair game's round building, the sound library's name table and its take
+rotation, the tuning knobs and their clamping, and the byte identity of the supplied data files. They also
+fail the build if any Persian text is hard-coded in a script.
 
 ## How the work is laid out
 
@@ -110,8 +111,8 @@ the scene is where you replace it.
 | Any interface icon | Overwrite the matching PNG in `Assets/Resources/SmallPotSprites/`. `TextureFactory` loads from there before generating anything, so your drawing wins. |
 | A panel or button background, or anything else about a widget | Change it in the scene. The interface is authored once and after that it is yours: a widget already there keeps its rect, its font, its sizes, its colours and its sprite, and only the words keep coming from the data. |
 | Materials and meshes | `Assets/Materials/Generated/` and `Assets/Meshes/Generated/`. Generated in code means unsaveable, which is why the baker writes them out. |
-| The font | `FontAsset` on the `App` object. `Window/SmallPot/Generate Project` rebuilds the font atlas and the scene together. |
-| Sound | `AudioDirector` on `App` has one slot per moment — click, correct, wrong, reward, water, morning, growth, thirst. Empty is silence, so add clips one at a time. |
+| The font | `FontAsset` on the `App` object is only a fallback now: the interface uses **Lalezar**, loaded from `Assets/Resources/Fonts/`. `Window/SmallPot/Regenerate Font Assets Only` rebuilds that atlas on its own — never run `Generate Project` just for the font, because that re-bakes the scene with it. |
+| Sound | Drop a file into `Assets/Resources/Audio/FX/` and it plays for the moment it is named after. `AudioDirector` on `App` also has a slot per moment — click, correct, wrong, reward, water, morning, growth, thirst, level up, no water — and a clip assigned there beats the file. Empty is silence, so clips can be added one at a time. |
 | A whole new pot state | Add the stage to `growth.stages` in `config.json` plus a `pot.state.<id>` string. The visuals resolve parametrically, so nothing in the scene needs a new prefab. |
 
 Three menu items help while editing. **Small Pot / Rebuild Stand-in Scene** regenerates the camera, the
@@ -158,9 +159,15 @@ one that answers is the address used from then on. An app that starts before the
 retrying quietly in the background, and the settings panel takes an address by hand if you would rather
 point it somewhere else without rebuilding.
 
-Two extra files are ours, not the challenge's: `data/dev.json` (the server address and debug flags) and
-`data/strings-extra.json` (optional lines the game uses when it can). Both are lowest priority, and the
-game still reads correctly with both deleted.
+Two extra files are ours, not the challenge's: `data/dev.json` and `data/strings-extra.json` (optional
+lines the game uses when it can). Both are lowest priority, and the game still reads correctly with both
+deleted.
+
+`data/dev.json` is also where **every knob this project added** lives: the server address and debug flags,
+the audio levels, the answer-result colours and icons, the pause after an answer, the shapes of the
+interface animations, and the sunrise. That is not a preference. The four supplied files are compared
+byte for byte against the originals by the test suite, so a new setting cannot go in them — it would mean
+editing a file the challenge owns.
 
 ### Editing content while the game is running
 
@@ -203,16 +210,28 @@ from its own copy.
 The stand-in art — window, pot, plant, icons and every button — is generated in code in a deliberately
 flat isometric style, and then baked into the project as real assets: 21 PNG sprites under
 `Assets/Resources/SmallPotSprites/`, 16 materials, 5 meshes and the scene itself. All of it is meant to
-be replaced. The only imported assets are two fonts — Vazirmatn and Amiri, both OFL — and RTLTMPro
-(MIT) for Persian letter shaping. Sources and licences are in [CREDITS.md](CREDITS.md).
+be replaced. The fonts are **Lalezar** for the interface and **Amiri** as the glyph fallback, both OFL;
+RTLTMPro (MIT) does the Persian letter shaping. Sources and licences are in [CREDITS.md](CREDITS.md).
 
-There are no sound clips, deliberately: `AudioDirector` has a slot per moment and plays nothing until
-you fill one, so the repository ships no unlicensed audio.
+**Lalezar has one honest gap.** It carries the initial, medial and final presentation forms that shaped
+Persian needs, but not 36 of the *isolated* ones. An isolated form is only reached by a letter that joins
+on neither side — a standalone one-letter word — so ordinary words are unaffected. Two such characters
+exist in the supplied data, a lone ی and a lone و, and those two are drawn from Amiri. That is why Amiri is
+kept: it has the fullest coverage of the three fonts here, and a fallback that covered less would leave a
+gap in the middle of a word rather than on its own.
+
+Audio is found by **file name** rather than by wiring. A clip is looked up under
+`Assets/Resources/Audio/FX/` (or `Audio/Music/`) by the name of the moment it belongs to, so dropping
+`No Water.mp3` into that folder is the whole installation — no inspector work, and a missing file is
+silence rather than an error. A clip assigned to a slot on `AudioDirector` still wins. The four
+"Select flowerpot" takes are picked at random on every answer press — never the one just used — so
+answering does not sound like a machine repeating itself, and the two music beds take turns for the same
+reason.
 
 ## Deliberate omissions
 
 * No accounts, cloud save, leaderboards or server-side game state: the server only hands out content.
-* No sound clips shipped — the hooks are there, the audio is yours.
+* No third-party or library music: every clip in the repository is one this project supplied.
 * No WebGL build — that module is not installed for this editor, so the APK is the deliverable.
 * No analytics, crash reporting or third-party SDKs.
 * The one-minute phone video is recorded by hand; the repository cannot record it.

@@ -24,6 +24,12 @@ namespace SmallPot
             public bool TimedOut;
             public bool CancelRequested;
             public int PendingChoice = -1;
+
+            /// <summary>
+            /// True while the clock is held after an answer. The clock stops, the game does not: the round
+            /// set carries on and the next question still waits for a tap.
+            /// </summary>
+            public bool Paused;
         }
 
         private readonly MotionPrefs _motion = new MotionPrefs();
@@ -57,6 +63,7 @@ namespace SmallPot
         private bool _hasServer;
         private ConnectionGateView _gate;
         private UpdatePromptView _update;
+        private NoticeView _notice;
 
         /// <summary>
         /// The revision the server has reported and the player has not accepted yet, or -1 for none.
@@ -513,6 +520,11 @@ namespace SmallPot
             _settings.ReloadRequested += OnReloadRequested;
             _settings.ResetSaveRequested += OnResetSaveRequested;
 
+            // The small notice that explains a refusal. Built before the gate, which is built last and so
+            // still covers it when the connection drops.
+            _notice = new NoticeView(Strings);
+            _notice.Build(canvas.transform);
+
             // Last, so that it covers everything else when it has to.
             _gate = new ConnectionGateView(Strings, RequestRetry);
             _gate.Build(canvas.transform);
@@ -619,6 +631,17 @@ namespace SmallPot
             if (!_state.TryWater(Config, allowAtFullBloom))
             {
                 _hud.RefreshActions(_state, allowAtFullBloom);
+
+                // Running out of drops is the one refusal with no sign of its own on screen: the pot is
+                // plainly dry and the button was plainly pressed, so without this the tap does nothing at
+                // all. The other refusals already explain themselves - the pot is watered, or the hint key
+                // says it is fully bloomed - and are deliberately left silent.
+                if (allowAtFullBloom && _state.Drops < Config.Watering.CostDrops)
+                {
+                    AudioDirector.Play(Sound.NoWater);
+                    _notice.Show();
+                }
+
                 return;
             }
 
@@ -646,6 +669,17 @@ namespace SmallPot
 
             int dropsBefore = _state.Drops;
             AudioDirector.Play(Sound.Morning);
+
+            // The day turns over while the plant does. The cycle owns its own curves; the settings below
+            // only set the span and the peak, and it is perfectly happy without them.
+            ApplyDayNightSettings();
+            DayNightCycle.Play();
+
+            // Captured before the morning is applied: advancing the stage is the one thing that has to be
+            // noticed from out here, because the state deliberately keeps its milestones to itself and the
+            // index is the only record of which stage the plant is standing in.
+            int stageBefore = _state.GrowthIndex;
+
             MorningOutcome outcome = _state.ApplyMorning(config);
             _save.MorningCount++;
             Save();
@@ -677,9 +711,14 @@ namespace SmallPot
             }
 
             // The verdict is heard before it is read: the report follows the sound by a beat.
+            //
+            // Grew is only ever returned on the morning the plant reaches a new stage, so this is exactly the
+            // moment the player asked for a fanfare at. The growth sound stays as the fallback rather than
+            // being deleted, because it is the right sound for any future morning that moves the plant
+            // without moving its stage; today no such morning exists, so in practice this is LevelUp alone.
             if (outcome == MorningOutcome.Grew)
             {
-                AudioDirector.Play(Sound.Growth);
+                AudioDirector.Play(_state.GrowthIndex > stageBefore ? Sound.LevelUp : Sound.Growth);
             }
             else if (outcome == MorningOutcome.Thirsty)
             {
@@ -731,6 +770,14 @@ namespace SmallPot
             _session = session;
             _minigame.BeginRoundSet();
 
+            // The quiz has a bed of its own, so a round set sounds like an event rather than like more of
+            // the same room. Null-safe: music is optional and the game plays without it.
+            MusicDirector music = MusicDirector.Instance;
+            if (music != null)
+            {
+                music.PlayFocus();
+            }
+
             for (session.Index = 0; session.Index < session.Rounds.Count; session.Index++)
             {
                 if (session.TimedOut || session.CancelRequested)
@@ -772,13 +819,33 @@ namespace SmallPot
 
                 yield return Tween.WaitUnscaled(
                     correct ? config.CorrectFeedbackSeconds : config.WrongFeedbackSeconds);
+
+                // A beat with the clock stopped, so the result can be read rather than only glimpsed.
+                // Additional to the feedback hold above and skipped whole at zero, which is exactly what
+                // the round set did before this existed.
+                float pause = FeedbackPauseSeconds;
+                if (pause > 0f)
+                {
+                    session.Paused = true;
+                    yield return Tween.WaitUnscaled(pause);
+                    session.Paused = false;
+                }
             }
 
+            // Cleared on the way out too: a set cancelled or timed out mid-pause must never leave the clock
+            // held for whatever comes next.
+            session.Paused = false;
             session.Running = false;
 
             if (session.CancelRequested)
             {
-                // Left early: no reward moment, and nothing is taken away either.
+                // Left early: no reward moment, and nothing is taken away either. The bed still goes back
+                // to the room, because the round set is over whether or not it was finished.
+                if (music != null)
+                {
+                    music.PlayBoard();
+                }
+
                 _minigame.EndRoundSet();
                 _session = null;
                 _busy = false;
@@ -795,10 +862,23 @@ namespace SmallPot
             AudioDirector.Play(met ? Sound.Reward : Sound.Encourage);
             _minigame.ShowReward(met, session.Correct, reward);
 
+            // The bed steps back while the card is up, so the fanfare or the nudge is heard rather than
+            // mixed into it.
+            if (music != null)
+            {
+                music.Duck(true);
+            }
+
             _rewardDismissed = false;
             while (!_rewardDismissed)
             {
                 yield return null;
+            }
+
+            if (music != null)
+            {
+                music.Duck(false);
+                music.PlayBoard();
             }
 
             _minigame.EndRoundSet();
@@ -832,10 +912,82 @@ namespace SmallPot
             if (_session != null && _session.Running)
             {
                 _session.CancelRequested = true;
+
+                // The pause is abandoned with it: its wait is still running, and leaving the flag set would
+                // hold the clock of a round set that no longer exists.
+                _session.Paused = false;
                 return;
             }
 
             _rewardDismissed = true;
+        }
+
+        /// <summary>
+        /// How long the clock stops after an answer so the result can be read.
+        ///
+        /// Read defensively: dev.json is optional and the game runs without it, so a missing settings object
+        /// falls back to the shipped default rather than throwing on the answer to a question.
+        /// </summary>
+        private static float FeedbackPauseSeconds
+        {
+            get
+            {
+                DevSettings settings = DevSettings.Current;
+                return settings != null ? settings.FeedbackPauseSeconds : 1f;
+            }
+        }
+
+        /// <summary>
+        /// Hands the tunable span to the day cycle before it plays.
+        ///
+        /// The cycle creates its own component on the sun when it is asked to play, and a component created
+        /// a moment from now cannot be configured a moment ago, so this attaches one first if there is none.
+        /// Play() then finds and reuses that one, because it looks for an existing cycle on the sun it picks.
+        /// With no sun at all this does nothing, and the cycle reports that itself.
+        /// </summary>
+        private static void ApplyDayNightSettings()
+        {
+            DevSettings settings = DevSettings.Current;
+            if (settings == null || settings.DayNight == null)
+            {
+                return;
+            }
+
+            DayNightCycle cycle = FindObjectOfType<DayNightCycle>();
+            if (cycle == null)
+            {
+                Light sun = RenderSettings.sun != null ? RenderSettings.sun : FindDirectionalLight();
+                if (sun == null)
+                {
+                    return;
+                }
+
+                cycle = sun.GetComponent<DayNightCycle>();
+                if (cycle == null)
+                {
+                    cycle = sun.gameObject.AddComponent<DayNightCycle>();
+                }
+            }
+
+            cycle.DurationSeconds = settings.DayNight.DurationSeconds;
+            cycle.Degrees = settings.DayNight.Degrees;
+            cycle.StartIntensity = settings.DayNight.StartIntensity;
+            cycle.PeakIntensity = settings.DayNight.PeakIntensity;
+        }
+
+        /// <summary>The first directional light in the scene, for a scene that never set RenderSettings.sun.</summary>
+        private static Light FindDirectionalLight()
+        {
+            Light[] lights = FindObjectsOfType<Light>();
+            for (int i = 0; i < lights.Length; i++)
+            {
+                if (lights[i] != null && lights[i].type == LightType.Directional)
+                {
+                    return lights[i];
+                }
+            }
+
+            return null;
         }
 
         private void OnSettings()
@@ -884,13 +1036,14 @@ namespace SmallPot
 
         private void Update()
         {
-            if (_session == null || !_session.Running)
+            if (_session == null || !_session.Running || _session.Paused)
             {
                 return;
             }
 
-            // Scaled time, so the round set stops when the game is paused for a lost connection. With the
-            // clock at its normal speed this is the same number it always was.
+            // Scaled time, so the round set stops when the game is paused for a lost connection, and held
+            // outright while an answer's result is on screen. At the clock's normal speed this is the same
+            // number it always was.
             _session.TimeLeft -= Time.deltaTime;
             _minigame.SetTimeLeft(_session.TimeLeft, Config.MiniGame.TotalSeconds);
 

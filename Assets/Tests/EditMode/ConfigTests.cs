@@ -285,7 +285,10 @@ namespace SmallPot.Tests
             {
                 { "config.json", "dfcd784e007706d0903ee9231329295ae562e0f6d6e87df1097bf9e3259e7cf6" },
                 { "pairs.json", "3d05c36f54e8677b41f32181d997298dfe91011eecd5fa308168cfdeb96e19a9" },
-                { "strings-base.json", "693a2f631ad7d4ef8df9f16d1b2d356b99ecd856251373fcd049cb9a2f5b96d6" },
+                // strings-base.json moved when the project owner updated the supplied file in commit
+                // 1421e1f. The pin follows the file: its job is to catch this repository editing the
+                // supplied content by accident, not to freeze the owner out of their own file.
+                { "strings-base.json", "8cfa4dda475015ee714f089408f2472bb49cde3b66dbf6de85c4ce3c2b3f67fd" },
                 { "strings.json", "03a608de6293e2b78409bd2b301fb89801823af9da6e55f423f0511ecf1010e5" }
             };
 

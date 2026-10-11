@@ -133,8 +133,14 @@ namespace SmallPot
                 Flower = profile.Flower && progress > 0f,
                 SoilDryness = soilDryness,
                 Droop = state.Thirsty,
+
+                // A badge is a status, not a schedule. Once the pot has been watered the player is not
+                // thirsty any more, so the thirsty badge goes immediately - even though the plant itself
+                // only straightens up overnight. The state deliberately keeps Thirsty until the morning,
+                // because that is what lets the morning report the recovery, but showing both badges in
+                // the meantime says two contradictory things at once.
                 WateredBadge = state.Watered,
-                ThirstyBadge = state.Thirsty
+                ThirstyBadge = state.Thirsty && !state.Watered
             };
         }
     }

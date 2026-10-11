@@ -6,6 +6,23 @@
   "requireServer": true,
   "connectionCheckSeconds": 3,
   "updateWatchHoldSeconds": 20,
+  "feedbackPauseSeconds": 1,
+  "dayNight": {
+    "durationSeconds": 3,
+    "degrees": 360,
+    "peakIntensity": 1.15,
+    "startIntensity": 0.55
+  },
+  "juice": {
+    "panelSeconds": 0.36,
+    "panelFrom": 0.88,
+    "buttonPressedScale": 0.95,
+    "buttonReleaseOvershoot": 0.035,
+    "revealSeconds": 0.4,
+    "revealDelaySeconds": 0.25,
+    "punchStrength": 0.18,
+    "jellyStrength": 0.05
+  },
   "audio": {
     "sfxVolume": 0.8,
     "musicVolume": 0.6,

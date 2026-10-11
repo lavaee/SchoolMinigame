@@ -44,6 +44,8 @@ namespace SmallPot
         private bool _ducked;
         private float _level = 1f;
         private float _silence;   // counts a bed down while it is not wanted at all
+        private DevSettings _appliedSettings;
+        private bool _loggedSettings;
 
         private void Awake()
         {
@@ -66,11 +68,46 @@ namespace SmallPot
             _level = 0f;
         }
 
+        private void Start()
+        {
+            ApplyAudioSettings();
+        }
+
         private void OnDestroy()
         {
             if (Instance == this)
             {
                 Instance = null;
+            }
+        }
+
+        /// <summary>
+        /// Pushes the crossfade and the dip from our own data onto this component.
+        ///
+        /// Called at startup and again whenever the settings object is replaced, so a revision pulled from
+        /// the server mid-session changes the feel of the ambience on the next hand-over rather than at the
+        /// next launch. Nothing is applied until the data has been read.
+        /// </summary>
+        public void ApplyAudioSettings()
+        {
+            DevSettings settings = DevSettings.Current;
+            _appliedSettings = settings;
+
+            if (settings == null || settings.Audio == null)
+            {
+                return;
+            }
+
+            var audio = settings.Audio;
+            CrossfadeSeconds = audio.CrossfadeSeconds;
+            DuckLevel = audio.DuckLevel;
+            DuckSeconds = audio.DuckSeconds;
+
+            if (audio.LogPlays && !_loggedSettings)
+            {
+                _loggedSettings = true;
+                Debug.Log($"[SmallPot] music crossfade {CrossfadeSeconds:0.00}s " +
+                          $"duck {DuckLevel:0.00} over {DuckSeconds:0.00}s");
             }
         }
 
@@ -123,6 +160,13 @@ namespace SmallPot
 
         private void Update()
         {
+            // A live reload replaces the settings object; the reference is all that has to be compared, and
+            // comparing it every frame allocates nothing and finds nothing in the scene.
+            if (!ReferenceEquals(_appliedSettings, DevSettings.Current))
+            {
+                ApplyAudioSettings();
+            }
+
             float music = AudioDirector.Instance != null ? AudioDirector.Instance.MusicVolume : 0.6f;
             float wanted = _ducked ? DuckLevel : 1f;
             float step = DuckSeconds > 0f ? Time.unscaledDeltaTime / DuckSeconds : 1f;

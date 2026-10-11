@@ -43,6 +43,16 @@ namespace SmallPot
         private RTLTextMeshPro _status;
         private TMP_InputField _address;
 
+        /// <summary>
+        /// Whether the gate has actually been put in front of the player.
+        ///
+        /// The two sounds on this screen belong to the transition, not to the state: the gate is hidden at
+        /// build time before anything has gone wrong, and it is closed after the player has got past it.
+        /// Without this flag the first of those would sound like a recovery, and every retry would sound
+        /// like a fresh failure.
+        /// </summary>
+        private bool _shown;
+
         public ConnectionGateView(StringsStore strings, Action<string> onRetry)
         {
             _strings = strings;
@@ -147,6 +157,13 @@ namespace SmallPot
 
             if (!wasVisible)
             {
+                // The bad news belongs to the arrival and to nothing else: shown again on every retry while
+                // the server stays away, an alarm that repeated every few seconds would stop reading as a
+                // warning. The bed steps back for as long as the gate is up, so the failure has the room.
+                _shown = true;
+                AudioDirector.Play(Sound.ConnectionLost);
+                MusicDirector.Instance?.Duck(true);
+
                 RevealAfterEntrance(_title);
             }
         }
@@ -156,6 +173,17 @@ namespace SmallPot
             if (_root == null)
             {
                 return;
+            }
+
+            // Being closed after a real showing means the player got past the gate, which is the only piece
+            // of good news this screen can carry. The call from Build is deliberately silent: it arrives
+            // before anything was ever shown, and the game should not sound relieved about a connection that
+            // was never tested.
+            if (_shown)
+            {
+                _shown = false;
+                AudioDirector.Play(Sound.ConnectionUp);
+                MusicDirector.Instance?.Duck(false);
             }
 
             // Faded rather than switched off in the same frame: the gate was animated in, and the fade also

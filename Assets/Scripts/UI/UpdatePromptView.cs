@@ -40,6 +40,13 @@ namespace SmallPot
         private RTLTextMeshPro _body;
         private RTLTextMeshPro _detail;
 
+        /// <summary>
+        /// Whether the card is actually in front of the player. The card pauses the game, so the bed has to
+        /// step back for it - and the step back belongs to the transition rather than to the state, because
+        /// the hide from Build arrives while nothing is waiting.
+        /// </summary>
+        private bool _shown;
+
         public UpdatePromptView(StringsStore strings, Action onApply)
         {
             _strings = strings;
@@ -126,6 +133,12 @@ namespace SmallPot
 
             if (!wasVisible)
             {
+                // The ambience steps back so the offer arrives into quiet rather than over the music. The
+                // card can be offered again after a later push, so this belongs to the showing that actually
+                // happened rather than to every call - which is exactly the guard wasVisible provides.
+                _shown = true;
+                MusicDirector.Instance?.Duck(true);
+
                 RevealAfterEntrance(_title);
             }
         }
@@ -135,6 +148,14 @@ namespace SmallPot
             if (_root == null)
             {
                 return;
+            }
+
+            // The music comes back up when the card goes. The hide from Build is silent by the same flag the
+            // entrance uses: the bed was never dipped for a card nobody saw.
+            if (_shown)
+            {
+                _shown = false;
+                MusicDirector.Instance?.Duck(false);
             }
 
             // Faded rather than switched off in the same frame: the card was animated in, and the fade also
