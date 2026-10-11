@@ -78,6 +78,13 @@ namespace SmallPot
                 "Hint", _card, Text("water.no_drops_hint"), 22f, Palette.InkSoft, UiKit.Centred);
             UiKit.Place(_hint.rectTransform, Top, new Vector2(0f, -86f), new Vector2(560f, 40f));
 
+            // Applied after the labels exist, and deliberately outside any authored check, so the value
+            // reaches a card generated from code and a card placed by hand alike. It is a font property and
+            // the text is never rewritten here: an RTL label re-shapes on assignment, so reading or writing
+            // the string at this point would shape the sentence a second time.
+            SetSpacing(_message);
+            SetSpacing(_hint);
+
             // The component captures the card's own scale as its home, so a card re-skinned by hand at some
             // other size keeps that size rather than being flattened to one on its first appearance.
             _juice = UiKit.GetOrAdd<PanelJuice>(_card.gameObject);
@@ -161,6 +168,27 @@ namespace SmallPot
             {
                 label.text = text;
             }
+        }
+
+        /// <summary>
+        /// Applies the data-driven character spacing to one label.
+        ///
+        /// Null-safe at both steps on purpose: this card is also built by an editor tool that runs before any
+        /// data has been read, and it still has to come out the right shape. The fallback is the value the
+        /// settings class carries, which is the one the data file ships with.
+        /// </summary>
+        private static void SetSpacing(RTLTextMeshPro label)
+        {
+            if (label == null)
+            {
+                return;
+            }
+
+            DevSettings settings = DevSettings.Current;
+            DevSettings.UiSettings ui = settings != null ? settings.Ui : null;
+            label.characterSpacing = ui != null
+                ? ui.CharacterSpacing
+                : DevSettings.UiSettings.Default.CharacterSpacing;
         }
 
         /// <summary>The source text for a key, or empty when the store does not have it.</summary>

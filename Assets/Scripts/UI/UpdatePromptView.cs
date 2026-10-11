@@ -95,6 +95,13 @@ namespace SmallPot
                 () => _onApply?.Invoke());
             UiKit.Place(apply.Rect, Top, new Vector2(0f, -348f), new Vector2(360f, 86f));
 
+            // Spacing is a font property set once the labels exist, and the text is never rewritten here -
+            // see NoticeView for why. Outside any authored check, so it lands on an authored card too.
+            SetSpacing(_title);
+            SetSpacing(_body);
+            SetSpacing(_detail);
+            SetSpacing(apply.Label);
+
             Hide();
 
             // Added after Hide, so both components wake on an inactive object: the card must not play an
@@ -183,6 +190,26 @@ namespace SmallPot
                 .SetUpdate(true)
                 .AppendInterval(RevealDelaySeconds)
                 .OnComplete(() => Juice.RevealText(label));
+        }
+
+        /// <summary>
+        /// Applies the data-driven character spacing to one label.
+        ///
+        /// Null-safe at both steps: this card is also built by an editor tool that runs before any data has
+        /// been read. The fallback is the value the settings class carries, which the data file ships with.
+        /// </summary>
+        private static void SetSpacing(RTLTextMeshPro label)
+        {
+            if (label == null)
+            {
+                return;
+            }
+
+            DevSettings settings = DevSettings.Current;
+            DevSettings.UiSettings ui = settings != null ? settings.Ui : null;
+            label.characterSpacing = ui != null
+                ? ui.CharacterSpacing
+                : DevSettings.UiSettings.Default.CharacterSpacing;
         }
 
         /// <summary>

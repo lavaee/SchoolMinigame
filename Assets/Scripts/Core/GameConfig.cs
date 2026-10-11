@@ -573,6 +573,14 @@ namespace SmallPot
             public string RewardMissedIcon = "leaf-128";
             public string RewardMissedTint = string.Empty;
 
+            /// <summary>
+            /// TMP character spacing for the two cards whose labels are generated rather than authored, so
+            /// there is nothing in the scene to set it on. Negative tightens the Persian joins, which is what
+            /// a hand-tuned heading wants. The range is wide enough to be useful and narrow enough that a
+            /// mistyped value cannot scatter the letters off the card.
+            /// </summary>
+            public float CharacterSpacing = -5f;
+
             public static UiSettings FromJson(JsonValue node)
             {
                 var ui = new UiSettings();
@@ -596,8 +604,19 @@ namespace SmallPot
                 ui.RewardMissedIcon = Text(node, "rewardMissedIcon", ui.RewardMissedIcon);
                 ui.RewardMissedTint = Text(node, "rewardMissedTint", ui.RewardMissedTint);
 
+                // The only numeric knob in this block, and the only route to it: neither card's labels exist
+                // in the scene until they have been authored, so a value typed into the Inspector would be
+                // overwritten on the next build. Warnings are dropped the same way this block's neighbours
+                // drop them - it describes appearance, and a malformed value falls back rather than stopping.
+                var ignored = new List<string>();
+                ui.CharacterSpacing = Range(
+                    GameConfig.ReadFloat(node, "characterSpacing", ui.CharacterSpacing, ignored), -20f, 20f);
+
                 return ui;
             }
+
+            private static float Range(float value, float low, float high) =>
+                value < low ? low : (value > high ? high : value);
 
             private static string Text(JsonValue node, string key, string fallback)
             {
