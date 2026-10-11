@@ -13821,7 +13821,7 @@ MonoBehaviour:
   Water: {fileID: 0}
   Morning: {fileID: 0}
   Growth: {fileID: 0}
-  Thirst: {fileID: 0}
+  Thirst: {fileID: 8300000, guid: d270ad4e3ac56284197a610381b86e5e, type: 3}
   PitchVariation: 0.03
   RepeatWindowSeconds: 0.04
   LogPlays: 1

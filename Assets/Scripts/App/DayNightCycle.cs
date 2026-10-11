@@ -26,7 +26,7 @@ namespace SmallPot
         public AnimationCurve Intensity = DefaultEase();
 
         [Tooltip("Rotation across the transition, evaluated from 0 to 1. The default eases in and out.")]
-        public AnimationCurve Rotation = DefaultEase();
+        public AnimationCurve Rotation = DefaultEaseInOut();
 
         [Header("Timing")]
         [Tooltip("How long the transition takes, in seconds.")]
@@ -196,9 +196,21 @@ namespace SmallPot
         private static AnimationCurve DefaultEase()
         {
             var curve = new AnimationCurve(
-                new Keyframe(0f, 0f, 0f, 0f),
-                new Keyframe(0.5f, 0.5f, 2f, 2f),
+                new Keyframe(0f, 1f, 0f, 0f),
+                new Keyframe(.5f, 0.25f, 0f, 0f),
                 new Keyframe(1f, 1f, 0f, 0f));
+
+            curve.preWrapMode = WrapMode.Clamp;
+            curve.postWrapMode = WrapMode.Clamp;
+            return curve;
+        } 
+        
+        private static AnimationCurve DefaultEaseInOut()
+        {
+            var curve = new AnimationCurve(
+                new Keyframe(0f, 0f, 0f, 0f),
+                new Keyframe(.5f, 1f, 5f, 5f),
+                new Keyframe(1f, 2f, 0f, 0f));
 
             curve.preWrapMode = WrapMode.Clamp;
             curve.postWrapMode = WrapMode.Clamp;
