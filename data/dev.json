@@ -5,5 +5,15 @@
   "showDebugPanel": true,
   "requireServer": true,
   "connectionCheckSeconds": 3,
-  "updateWatchHoldSeconds": 20
+  "updateWatchHoldSeconds": 20,
+  "audio": {
+    "sfxVolume": 0.8,
+    "musicVolume": 0.6,
+    "pitchVariation": 0.03,
+    "repeatWindowSeconds": 0.04,
+    "crossfadeSeconds": 1.5,
+    "duckLevel": 0.35,
+    "duckSeconds": 0.35,
+    "logPlays": true
+  }
 }

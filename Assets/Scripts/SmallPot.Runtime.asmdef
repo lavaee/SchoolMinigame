@@ -3,7 +3,9 @@
     "rootNamespace": "SmallPot",
     "references": [
         "RTLTMPro",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "DOTween.Modules",
+        "DOTweenPro.Scripts"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -342,7 +342,8 @@ namespace SmallPot
             Color background,
             Color labelColor,
             UnityAction onClick,
-            Sprite icon = null)
+            Sprite icon = null,
+            Sound sound = Sound.Click)
         {
             RectTransform rect = Node(name, parent);
             var image = GetOrAdd<Image>(rect.gameObject);
@@ -374,7 +375,7 @@ namespace SmallPot
                 // Cleared first: the builders run again on every data reload, and stacking the same
                 // handler twice would fire it twice.
                 button.onClick.RemoveAllListeners();
-                button.onClick.AddListener(() => AudioDirector.Play(Sound.Click));
+                button.onClick.AddListener(() => AudioDirector.Play(sound));
                 button.onClick.AddListener(onClick);
             }
 

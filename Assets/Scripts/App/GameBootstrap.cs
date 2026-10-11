@@ -57,6 +57,24 @@ namespace SmallPot
                 Audio = FindObjectOfType<AudioDirector>();
             }
 
+            // The ambience runs on an object of its own, with sources of its own, so an effect's pitch and a
+            // bed's fade can never interfere. It starts on the general bed; the minigame asks for its own.
+            //
+            // Created only while playing: this method can also be called from the editor, and quietly adding
+            // objects to somebody's scene is not something a bootstrap should do.
+            if (Application.isPlaying)
+            {
+                MusicDirector music = FindObjectOfType<MusicDirector>();
+                if (music == null)
+                {
+                    var holder = new GameObject("SmallPot Music");
+                    holder.transform.SetParent(transform, false);
+                    music = holder.AddComponent<MusicDirector>();
+                }
+
+                music.PlayBoard();
+            }
+
             GameController controller = gameObject.GetComponent<GameController>();
             if (controller == null)
             {

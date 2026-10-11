@@ -448,6 +448,64 @@ namespace SmallPot
         /// </summary>
         public float UpdateWatchHoldSeconds = 20f;
 
+        /// <summary>
+        /// The feel of the sound, from data/dev.json rather than from the scene.
+        ///
+        /// These live here for the same reason the connection timings do: they are the numbers worth
+        /// adjusting while listening, and this file can be pushed from the admin page into a running game.
+        /// Nothing about the sound needs a rebuild to retune.
+        /// </summary>
+        public AudioSettings Audio = new AudioSettings();
+
+        /// <summary>Volumes, variation and the ambience crossfade. Every value is clamped on the way in.</summary>
+        [Serializable]
+        public sealed class AudioSettings
+        {
+            public float SfxVolume = 0.8f;
+            public float MusicVolume = 0.6f;
+            public float PitchVariation = 0.03f;
+            public float RepeatWindowSeconds = 0.04f;
+            public float CrossfadeSeconds = 1.5f;
+            public float DuckLevel = 0.35f;
+            public float DuckSeconds = 0.35f;
+            public bool LogPlays = true;
+
+            public static AudioSettings FromJson(JsonValue node)
+            {
+                var audio = new AudioSettings();
+                if (node == null || !node.IsObject)
+                {
+                    return audio;
+                }
+
+                var ignored = new List<string>();
+                audio.SfxVolume = Unit(GameConfig.ReadFloat(node, "sfxVolume", audio.SfxVolume, ignored));
+                audio.MusicVolume = Unit(GameConfig.ReadFloat(node, "musicVolume", audio.MusicVolume, ignored));
+                audio.DuckLevel = Unit(GameConfig.ReadFloat(node, "duckLevel", audio.DuckLevel, ignored));
+
+                audio.PitchVariation = Clamp(
+                    GameConfig.ReadFloat(node, "pitchVariation", audio.PitchVariation, ignored), 0f, 0.2f);
+                audio.RepeatWindowSeconds = Clamp(
+                    GameConfig.ReadFloat(node, "repeatWindowSeconds", audio.RepeatWindowSeconds, ignored), 0f, 0.5f);
+                audio.CrossfadeSeconds = Clamp(
+                    GameConfig.ReadFloat(node, "crossfadeSeconds", audio.CrossfadeSeconds, ignored), 0f, 10f);
+                audio.DuckSeconds = Clamp(
+                    GameConfig.ReadFloat(node, "duckSeconds", audio.DuckSeconds, ignored), 0f, 5f);
+
+                if (node.Has("logPlays"))
+                {
+                    audio.LogPlays = GameConfig.ReadBool(node, "logPlays", audio.LogPlays, ignored);
+                }
+
+                return audio;
+            }
+
+            private static float Unit(float value) => Clamp(value, 0f, 1f);
+
+            private static float Clamp(float value, float low, float high) =>
+                value < low ? low : (value > high ? high : value);
+        }
+
         public static DevSettings FromJson(JsonValue root)
         {
             var settings = new DevSettings();

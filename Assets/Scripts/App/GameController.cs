@@ -790,7 +790,9 @@ namespace SmallPot
             bool met = config.MiniGame.MeetsRewardThreshold(session.Correct);
             _pendingReward = met ? reward : 0;
 
-            AudioDirector.Play(Sound.Reward);
+            // Below the threshold the moment is still marked, but kindly: the reward clip is a fanfare and
+            // the encouragement clip is a nudge, and the brief is explicit that a missed round is not blame.
+            AudioDirector.Play(met ? Sound.Reward : Sound.Encourage);
             _minigame.ShowReward(met, session.Correct, reward);
 
             _rewardDismissed = false;

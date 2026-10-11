@@ -92,7 +92,7 @@ namespace SmallPot
                 int index = i;
                 LabeledButton option = UiKit.Button(
                     $"Option {i}", panel.transform, string.Empty, 36f, Palette.AccentSoft, Palette.Ink,
-                    () => OptionChosen?.Invoke(index));
+                    () => OptionChosen?.Invoke(index), sound: Sound.Select);
                 UiKit.Band(option.Rect, true, 400f + (i * 116f), 100f, 48f);
                 _options.Add(option);
             }
