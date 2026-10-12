@@ -694,7 +694,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 66463680}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1212112793}
+  m_Script: {fileID: 11500000, guid: 4a81275cd0e11f544aa96e0a1c171be9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   PressedScale: 0
@@ -7135,7 +7135,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 605247589}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1402299776}
+  m_Script: {fileID: 11500000, guid: 1e00861c00594614c9056482f58de1a6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   Scale: 1
@@ -8984,7 +8984,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 809546972}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1402299776}
+  m_Script: {fileID: 11500000, guid: 1e00861c00594614c9056482f58de1a6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   Scale: 1
@@ -10146,7 +10146,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 919671749}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1402299776}
+  m_Script: {fileID: 11500000, guid: 1e00861c00594614c9056482f58de1a6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   Scale: 1
@@ -11275,7 +11275,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1043914964}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1402299776}
+  m_Script: {fileID: 11500000, guid: 1e00861c00594614c9056482f58de1a6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   Scale: 1
@@ -11305,7 +11305,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1043914964}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 1212112793}
+  m_Script: {fileID: 11500000, guid: 4a81275cd0e11f544aa96e0a1c171be9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   PressedScale: 0
@@ -12119,21 +12119,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1190884499}
   m_CullTransparentMesh: 1
---- !u!115 &1212112793
-MonoScript:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  serializedVersion: 7
-  m_DefaultReferences: {}
-  m_Icon: {fileID: 0}
-  m_Type: 0
-  m_ExecutionOrder: 0
-  m_ClassName: ButtonJuice
-  m_Namespace: SmallPot
-  m_AssemblyName: SmallPot.Runtime
 --- !u!1 &1228965057
 GameObject:
   m_ObjectHideFlags: 0
@@ -13086,21 +13071,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 2774220344278030320, guid: 6270d8ac222746f44965659eac33458c, type: 3}
   m_PrefabInstance: {fileID: 296942172}
   m_PrefabAsset: {fileID: 0}
---- !u!115 &1402299776
-MonoScript:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  serializedVersion: 7
-  m_DefaultReferences: {}
-  m_Icon: {fileID: 0}
-  m_Type: 0
-  m_ExecutionOrder: 0
-  m_ClassName: PanelJuice
-  m_Namespace: SmallPot
-  m_AssemblyName: SmallPot.Runtime
 --- !u!1 &1409433238
 GameObject:
   m_ObjectHideFlags: 0
