@@ -15,19 +15,19 @@
   },
   "juice": {
     "panelSeconds": 0.36,
-    "panelFrom": 0.88,
-    "buttonPressedScale": 0.95,
-    "buttonReleaseOvershoot": 0.035,
-    "revealSeconds": 0.4,
+    "panelFrom": 0.85,
+    "buttonPressedScale": 0.90,
+    "buttonReleaseOvershoot": 0.1,
+    "revealSeconds": 0.5,
     "revealDelaySeconds": 0.25,
-    "punchStrength": 0.18,
-    "jellyStrength": 0.05
+    "punchStrength": 5,
+    "jellyStrength": 5
   },
   "audio": {
     "sfxVolume": 0.8,
     "musicVolume": 0.6,
-    "pitchVariation": 0.03,
-    "repeatWindowSeconds": 0.04,
+    "pitchVariation": 0,
+    "repeatWindowSeconds": 0,
     "crossfadeSeconds": 1.5,
     "duckLevel": 0.35,
     "duckSeconds": 0.35,
