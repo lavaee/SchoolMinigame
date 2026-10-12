@@ -5,7 +5,7 @@
     "settings.data_source_title": "منبع داده‌ها",
     "settings.data_source_line": "{file}: {source}",
     "settings.data_source.remote": "از سرور",
-    "settings.data_source.cache": "ذخیره‌ی موقت",
+    "settings.data_source.cache": "آفلاین",
     "settings.data_source.bundled": "همراه برنامه",
     "settings.data_source_count": "{source} · {n} پرونده",
     "settings.server_url": "نشانی سرور",

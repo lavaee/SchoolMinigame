@@ -9,7 +9,7 @@
   "feedbackPauseSeconds": 1,
   "dayNight": {
     "durationSeconds": 3,
-    "degrees": 360,
+    "degrees": 180,
     "peakIntensity": 1.15,
     "startIntensity": 0.55
   },
@@ -35,6 +35,7 @@
   },
   "ui": {
     "characterSpacing": -5,
+    "scrimOpacity": 0.55,
     "answerCorrectBackground": "",
     "answerCorrectLabel": "",
     "answerWrongBackground": "",
