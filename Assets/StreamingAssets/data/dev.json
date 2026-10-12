@@ -7,6 +7,10 @@
   "connectionCheckSeconds": 3,
   "updateWatchHoldSeconds": 20,
   "feedbackPauseSeconds": 1,
+  "miniGame": {
+    "startDrops": 3,
+    "totalSeconds": 60
+  },
   "dayNight": {
     "durationSeconds": 3,
     "degrees": 180,

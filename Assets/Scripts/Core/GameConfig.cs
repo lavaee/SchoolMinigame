@@ -630,6 +630,64 @@ namespace SmallPot
             }
         }
 
+        /// <summary>
+        /// The two round numbers worth retuning without a rebuild: how many drops a new plant starts with,
+        /// and how long one question lasts.
+        ///
+        /// Both are owned by the supplied config.json, which a test pins byte for byte as the employer's
+        /// file, so a dev.json key is this project's route to changing one - and a pushed dev.json reaches a
+        /// running game, which is what makes them tunable while playing. An absent key leaves the config
+        /// file's own value alone, so a pushed config.json still decides on its own.
+        /// </summary>
+        [Serializable]
+        public sealed class MiniGameSettings
+        {
+            /// <summary>Whether dev.json said anything. Without these a default would silently shadow config.json.</summary>
+            public bool HasStartDrops;
+            public bool HasTotalSeconds;
+
+            public int StartDrops = 3;
+            public int TotalSeconds = 60;
+
+            public static MiniGameSettings FromJson(JsonValue node)
+            {
+                var miniGame = new MiniGameSettings();
+                if (node == null || !node.IsObject)
+                {
+                    return miniGame;
+                }
+
+                // Warnings are dropped the same way the neighbouring blocks drop them: this describes the
+                // shape of a round, and a malformed value falls back rather than stopping the game.
+                var ignored = new List<string>();
+
+                if (node.Has("startDrops"))
+                {
+                    miniGame.HasStartDrops = true;
+                    miniGame.StartDrops = Clamp(
+                        GameConfig.ReadInt(node, "startDrops", miniGame.StartDrops, ignored), 0, 99);
+                }
+
+                if (node.Has("totalSeconds"))
+                {
+                    miniGame.HasTotalSeconds = true;
+
+                    // Five seconds is the floor the config layer itself enforces, so the dev route cannot
+                    // ask for a question nobody could read.
+                    miniGame.TotalSeconds = Clamp(
+                        GameConfig.ReadInt(node, "totalSeconds", miniGame.TotalSeconds, ignored), 5, 600);
+                }
+
+                return miniGame;
+            }
+
+            private static int Clamp(int value, int low, int high) =>
+                value < low ? low : (value > high ? high : value);
+        }
+
+        /// <summary>Starting drops and question length, overridden by data/dev.json when it says so.</summary>
+        public MiniGameSettings MiniGame = new MiniGameSettings();
+
         /// <summary>Volumes, variation and the ambience crossfade. Every value is clamped on the way in.</summary>
         [Serializable]
         public sealed class AudioSettings
@@ -657,7 +715,7 @@ namespace SmallPot
                 audio.DuckLevel = Unit(GameConfig.ReadFloat(node, "duckLevel", audio.DuckLevel, ignored));
 
                 audio.PitchVariation = Clamp(
-                    GameConfig.ReadFloat(node, "pitchVariation", audio.PitchVariation, ignored), 0f, 0.2f);
+                    GameConfig.ReadFloat(node, "pitchVariation", audio.PitchVariation, ignored), 0f, 0f);
                 audio.RepeatWindowSeconds = Clamp(
                     GameConfig.ReadFloat(node, "repeatWindowSeconds", audio.RepeatWindowSeconds, ignored), 0f, 0.5f);
                 audio.CrossfadeSeconds = Clamp(

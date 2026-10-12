@@ -37,6 +37,12 @@ namespace SmallPot
 
         private DataBundle _bundle;
         private PlantState _state = new PlantState();
+
+        /// <summary>
+        /// True until the first bundle lands on a game that had no save. The supplied config only arrives
+        /// with the bundle, so this is what lets a brand new game take its starting drops from it.
+        /// </summary>
+        private bool _freshGame;
         private SaveState _save = new SaveState();
 
         private Camera _camera;
@@ -449,16 +455,24 @@ namespace SmallPot
 
         private void LoadSave()
         {
-            if (SaveStore.TryLoad(out SaveState loaded, out string error))
+            _freshGame = !SaveStore.TryLoad(out SaveState loaded, out string error);
+
+            if (_freshGame)
+            {
+                if (!string.IsNullOrEmpty(error))
+                {
+                    Log.Warn($"Save could not be read ({error}); starting a new game.");
+                }
+            }
+            else
             {
                 _save = loaded;
             }
-            else if (!string.IsNullOrEmpty(error))
-            {
-                Log.Warn($"Save could not be read ({error}); starting a new game.");
-            }
 
             _motion.ReduceMotion = _save.ReduceMotion;
+
+            // Only a game that was never saved is reseeded once the config arrives, so the defaults here
+            // are a placeholder rather than the value the player ends up with.
             _state = _save.Plant ?? PlantState.NewGame(GameConfig.Defaults());
         }
 
@@ -470,6 +484,22 @@ namespace SmallPot
             }
 
             _bundle = bundle;
+
+            // The supplied config only becomes known here, so a game that has never been saved takes its
+            // starting drops now. It is reseeded on every bundle until the plant is touched, because the
+            // pushed config arrives with the remote bundle rather than the local one, and reseeding an
+            // untouched plant is harmless while reseeding one already under way would hand the player a
+            // second allowance.
+            bool untouched = _state != null
+                && !_state.Watered
+                && _state.GrowthIndex == 0
+                && _state.ProgressMornings == 0;
+
+            if (_freshGame && untouched && (_session == null || !_session.Running))
+            {
+                _state = PlantState.NewGame(bundle.Config);
+                _save.Plant = _state;
+            }
 
             // A state saved against an older config might point past the end of the stage list.
             SaveStore.ClampToConfig(_save, bundle.Config);
